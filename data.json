@@ -1,0 +1,76 @@
+{
+  "iconList": [
+    {
+      "icon": "assets/images/icon/bilibili.svg",
+      "url": "https://m.bilibili.com/space/1273905785"
+    },
+    {
+      "icon": "assets/images/icon/gitee-fill.svg",
+      "url": "https://gitee.com/Androidlinux/"
+    }
+  ],
+
+  "lineList": [
+     {
+      "time": "2025-1-1",
+      "text": "敬请期待"
+    },
+    {
+      "time": "2024-8-26",
+      "text": "搭建了个下载站"
+    },
+    {
+      "time": "2024-8-25",
+      "text": "搭建了主页"
+    },
+    {
+      "time": "2024-02-08",
+      "text": "做了个网盘"
+    },
+    {
+      "time": "...",
+      "text": "..."
+    },
+    {
+      "time": "2023-12-30",
+      "text": "搭建了一个纪念网站"
+    },
+    {
+      "time": "2022-10-06",
+      "text": "搭建第一个网站"
+    }
+  ],
+
+  "siteList": [
+    {
+      "name": "alist网盘",
+      "content": "分享文件(平时不会启用）",
+      "url": "http://jp.frp.one:11888",
+      "status": false
+    },
+    {
+      "name": "网站进度",
+      "content": "实时查看",
+      "url": "http://jp.frp.one:11555/dex.php",
+      "status": false
+    },
+    {
+      "name": "纪念",
+      "content": "2023",
+      "url": "http://jp.frp.one:11555/index.htm",
+      "status": false
+    },
+    {
+      "name": "下载站",
+      "content": "比较稳定",
+      "url": "http://jp.frp.one:11333",
+      "status": false
+    },
+    {
+      "name": "360",
+      "content": "360搜索",
+      "url": "https://www.so.com/",
+      "status": true
+    }
+  ]
+}
