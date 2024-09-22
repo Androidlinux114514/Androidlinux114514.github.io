@@ -140,7 +140,7 @@ document.querySelector('#music').addEventListener('click', function () {
 })
 
 // 天气插件
-!(function (a, h, g, f, e, d, c, b) {
+/* !(function (a, h, g, f, e, d, c, b) {
   b = function () {
     d = h.createElement(g)
     c = h.getElementsByTagName(g)[0]
@@ -178,4 +178,4 @@ window.SeniverseWeatherWidget('show', {
   token: 'ac1d036a-99f3-4f88-ae98-f795bb93a9f0',
   hover: 'disabled',
   container: 'tp-weather-widget'
-})
+}) */
