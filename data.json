@@ -43,33 +43,33 @@
 
   "siteList": [
     {
-      "name": "alist网盘",
-      "content": "分享文件(平时不会启用）",
-      "url": "http://jp.frp.one:11888",
-      "status": false
+      "name": "github",
+      "content": "分享项目",
+      "url": "https://github.com/Andrpidlinux114514",
+      "status": true
     },
     {
-      "name": "网站进度",
-      "content": "实时查看",
-      "url": "http://jp.frp.one:11555/dex.php",
-      "status": false
+      "name": "gitee",
+      "content": "分享项目",
+      "url": "https://gitee.com/Androidlinux",
+      "status": true
     },
     {
-      "name": "纪念",
-      "content": "2023",
-      "url": "http://jp.frp.one:11555/index.htm",
-      "status": false
+      "name": "哔哩哔哩",
+      "content": "哔哩哔哩",
+      "url": "https://m.bilibili.com/space/1273905785",
+      "status": true
     },
     {
-      "name": "下载站",
-      "content": "比较稳定",
-      "url": "http://jp.frp.one:11333",
-      "status": false
+      "name": "github托管网站",
+      "content": "托管网站",
+      "url": "https://Androidlinux114514.github.io",
+      "status": true
     },
     {
-      "name": "360",
-      "content": "360搜索",
-      "url": "https://www.so.com/",
+      "name": "主页",
+      "content": "主页",
+      "url": "http://Android.kilikili.cc",
       "status": true
     }
   ]
