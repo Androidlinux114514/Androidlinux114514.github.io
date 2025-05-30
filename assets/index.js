@@ -140,7 +140,7 @@ document.querySelector('#music').addEventListener('click', function () {
 })
 
 // 天气插件
-/* !(function (a, h, g, f, e, d, c, b) {
+* !(function (a, h, g, f, e, d, c, b) {
   b = function () {
     d = h.createElement(g)
     c = h.getElementsByTagName(g)[0]
