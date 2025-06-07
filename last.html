@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能电子价签蓝牙控制中心</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                font-size: 14px;
+            }
+            
+            .container {
+                border-radius: 15px;
+                margin: 0;
+            }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 20px 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+                margin-bottom: 8px;
+            }
+            
+            .header p {
+                font-size: 0.95em;
+            }
+        }
+
+        .connection-panel {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            padding: 20px;
+            margin: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .connection-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+            min-height: 44px; /* 确保触摸友好的最小高度 */
+        }
+
+        @media (max-width: 768px) {
+            .connection-panel {
+                margin: 15px;
+                padding: 15px;
+            }
+            
+            .connection-buttons {
+                gap: 10px;
+                flex-direction: column;
+            }
+            
+            .btn {
+                padding: 15px 20px;
+                font-size: 16px;
+                min-height: 50px;
+                width: 100%;
+                border-radius: 12px;
+            }
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            margin: 20px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: none;
+            font-size: 16px;
+            font-weight: 500;
+            color: #1976d2;
+            transition: all 0.3s ease;
+            position: relative;
+            min-height: 44px;
+        }
+
+        @media (max-width: 768px) {
+            .tabs {
+                margin: 15px;
+                flex-direction: column;
+                border-radius: 12px;
+            }
+            
+            .tab {
+                padding: 15px;
+                font-size: 15px;
+                min-height: 50px;
+                border-right: none !important;
+            }
+            
+            .tab:not(:last-child) {
+                border-bottom: 1px solid rgba(255,255,255,0.3);
+            }
+            
+            .tab.active {
+                transform: none;
+                border-radius: 0;
+            }
+        }
+
+        .tab:not(:last-child) {
+            border-right: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+            color: white;
+            transform: scale(1.05);
+            z-index: 2;
+            box-shadow: 0 4px 15px rgba(25, 118, 210, 0.4);
+        }
+
+        .tab:hover:not(.active) {
+            background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            display: none;
+            padding: 30px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            border-bottom: 2px solid #e3f2fd;
+            padding-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 20px 15px;
+            }
+            
+            .card {
+                padding: 20px;
+                margin-bottom: 15px;
+                border-radius: 12px;
+            }
+            
+            .card:hover {
+                transform: none;
+            }
+            
+            .card-title {
+                font-size: 1.2em;
+                margin-bottom: 15px;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: #fafbfc;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #4facfe;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+        }
+
+        .form-control-inline {
+            display: inline-block;
+            width: auto;
+            margin-right: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .form-control {
+                padding: 15px 16px;
+                font-size: 16px; /* 防止iOS缩放 */
+                border-radius: 8px;
+            }
+            
+            .form-control-inline {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .button-group .btn {
+                width: 100%;
+                margin: 0;
+            }
+        }
+
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        #canvas {
+            border: 3px solid #4facfe;
+            border-radius: 10px;
+            background: white;
+        }
+
+        #edit-font {
+            max-width: 296px;
+            position: absolute;
+            border: 2px solid #4facfe;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: none;
+            overflow: auto;
+            border-radius: 5px;
+            padding: 5px;
+            backdrop-filter: blur(5px);
+        }
+
+        .log-container {
+            margin: 20px;
+            background: #2c3e50;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .log-header {
+            background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+        }
+
+        #log {
+            width: 100%;
+            background: #1a252f;
+            color: #00ff00;
+            border: none;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 200px;
+        }
+
+        @media (max-width: 768px) {
+            .canvas-container {
+                width: 100%;
+                max-width: 100%;
+                border-radius: 8px;
+            }
+            
+            #canvas {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                border-width: 2px;
+                border-radius: 8px;
+            }
+            
+            #edit-font {
+                max-width: 90%;
+                border-radius: 8px;
+            }
+            
+            .log-container {
+                margin: 15px;
+                border-radius: 12px;
+            }
+            
+            .log-header {
+                padding: 12px 15px;
+                font-size: 14px;
+            }
+            
+            #log {
+                padding: 15px;
+                font-size: 11px;
+                min-height: 150px;
+            }
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e74c3c;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #27ae60;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        /* 表格响应式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        td, th {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        @media (max-width: 768px) {
+            .feature-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            /* 表格在移动端的处理 */
+            table {
+                font-size: 14px;
+            }
+            
+            td, th {
+                padding: 10px 6px;
+                font-size: 13px;
+            }
+            
+            /* 让表格可以横向滚动 */
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* 工具提示在移动端的优化 */
+            .tooltip::after {
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+        }
+
+        .icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .tooltip:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 移动端额外优化 */
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .btn {
+                font-size: 15px;
+                padding: 12px 16px;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script type="application/javascript" src="电子价签蓝牙控制器_files/dithering.js"></script>
+    <script type="application/javascript" src="电子价签蓝牙控制器_files/utils.js"></script>
+</head>
+
+<body>
+    <script>
+        let bleDevice;
+        let gattServer;
+        let epdService;
+        let rxtxService;
+        let epdCharacteristic;
+        let rxtxCharacteristic;
+        let reconnectTrys = 0;
+
+        function delay(delayInms) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve(2);
+                }, delayInms);
+            });
+        }
+
+        // 字符串进行gb2312编码
+        function encodeToGb2312(str) {
+            if (!str) {
+                return '';
+            }
+            return urlEncode(strTrim(str));
+        }
+
+        // 将16进制转decode编码
+        function hex2per(data) {
+            if (data.length % 2) {
+                console.error('16进制数据格式错误');
+                return '';
+            };
+
+            var tmp = [];
+
+            for (let i = 0; i < data.length; i += 2) {
+                tmp.push(data.charAt(i) + data.charAt(i + 1));
+            }
+
+            let str = tmp.join('%');
+
+            return '%' + str;
+        }
+
+        // 字符串进行gb2312解码
+        function decodeCnGb2312(s) {
+            var strChn = getChineseCode();
+            var strOut = '';
+            let str = hex2per(s);
+
+            if (str) {
+                for (var i = 0; i < str.length; i++) {
+                    var c = str.charAt(i);
+                    // +是空格
+                    if (c == '+') {
+                        strOut += ' ';
+                    }
+                    // a,b,c,1,2等，非%开头的，直接返回本身
+                    else if (c != '%') {
+                        strOut += c;
+                    }
+                    // %开头
+                    else {
+                        i++;
+                        var nextC = str.charAt(i);
+                        // 数字，则不是汉字
+                        if (!isNaN(parseInt(nextC))) {
+                            i++;
+                            strOut += decodeURIComponent(c + nextC + str.charAt(i));
+                        } else {
+                            var x = new String();
+                            try {
+                                var code = str.substr(i, 2) + str.substr(i + 3, 2);
+                                code = code.toUpperCase();
+                                i = i + 4;
+
+                                var index = -1;
+                                while ((index = strChn.indexOf(code, index + 1)) != -1) {
+                                    if (index % 4 == 0) {
+                                        strOut += String.fromCharCode(index / 4 + 19968);
+                                        break;
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            }
+            return strOut;
+        }
+
+        function strTrim(str) {
+            while (str.length > 0 && str.charAt(0) == ' ')
+                str = str.substring(1, str.length);
+            while (str.length > 0 && str.charAt(str.length - 1) == ' ')
+                str = str.substring(0, str.length - 1);
+            str = str.replace(' ', '+');
+            return str;
+        }
+
+        function strReplace(str, a, b) {
+            var i;
+            var s2 = str;
+            while (s2.indexOf(a) > 0) {
+                i = s2.indexOf(a);
+                s2 = s2.substring(0, i) + b + s2.substring(i + 2, s2.length);
+            }
+            return s2;
+        }
+
+        function urlEncode(strInput) {
+            var str = strInput.replace(/(script)/g, '');
+            str = str.replace(/(javascript)/g, '');
+            str = str.replace(/(alert)/g, '');
+            str = str.replace(/(style)/g, '');
+            str = str.replace(/(<)/g, '');
+            str = str.replace(/(>)/g, '');
+            str = strReplace(str, '/', '');
+            var Sys = {};
+            var ua = (navigator && navigator.userAgent.toLowerCase()) || 'chrome';
+            var s;
+            (s = ua.match(/msie ([\d.]+)/))
+                ? (Sys.ie = s[1])
+                : (s = ua.match(/firefox\/([\d.]+)/))
+                ? (Sys.firefox = s[1])
+                : (s = ua.match(/chrome\/([\d.]+)/))
+                ? (Sys.chrome = s[1])
+                : (s = ua.match(/opera.([\d.]+)/))
+                ? (Sys.opera = s[1])
+                : (s = ua.match(/version\/([\d.]+).*safari/))
+                ? (Sys.safari = s[1])
+                : 0;
+
+            if (Sys.firefox || Sys.chrome) {
+                return urlEncodeV2(str);
+            }
+            if (strInput) {
+                if (window && window.execScript) {
+                    str = str.replace(/./g, function (sHex) {
+                        window.EnCodeStr = '';
+                        window.sHex = sHex;
+                        window.execScript('window.EnCodeStr=Hex(Asc(window.sHex))', 'vbscript');
+                        return window.EnCodeStr.replace(/../g, '%$&');
+                    });
+                }
+                return str;
+            } else {
+                return '';
+            }
+        }
+
+        function urlEncodeV2(str) {
+            var ret = '';
+            var strSpecial = '!"#$%&\'()*+,/:;<=>?[]^`{|}~%';
+
+            for (var i = 0; i < str.length; i++) {
+                var chr = str.charAt(i);
+                var c = strToAsc(chr);
+                var tt = '';
+                tt += chr + ':' + c + 'n';
+                if (parseInt('0x' + c) > 0x7f) {
+                    ret += c.slice(0, 2) + c.slice(-2);
+                } else {
+                    if (parseInt('0x' + c) < 0x10) {
+                        ret += '0' + c.toString(16);
+                    } else {
+                        ret += c.toString(16);
+                    }
+                }
+            }
+            return ret;
+        }
+
+        function urlDecodeV2(str) {
+            var ret = '';
+            for (var i = 0; i < str.length; i++) {
+                var chr = str.charAt(i);
+                if (chr == '+') {
+                    ret += '';
+                } else if (chr == '%') {
+                    var asc = str.substring(i + 1, i + 3);
+                    if (parseInt('0x' + asc) > 0x7f) {
+                        ret += ascToStr(parseInt('0x' + asc + str.substring(i + 4, i + 6)));
+                        i += 5;
+                    } else {
+                        ret += ascToStr(parseInt('0x' + asc));
+                        i += 2;
+                    }
+                } else {
+                    ret += chr;
+                }
+            }
+            return ret;
+        }
+
+        function strToAsc(str) {
+            var n = unicodeToAnsi(str.charCodeAt(0));
+            var s = n.toString(16);
+            return s.toUpperCase();
+        }
+
+        function ascToStr(code) {
+            var n = ansiToUnicode(code);
+            return String.fromCharCode(n);
+        }
+
+        function unicodeToAnsi(chrCode) {
+            var chrHex = chrCode.toString(16);
+            chrHex = '000' + chrHex.toUpperCase();
+            chrHex = chrHex.substr(chrHex.length - 4);
+            var i = getUniCode().indexOf(chrHex);
+            if (i != -1) {
+                chrHex = getAnsiCodeChr().substr(i, 4);
+            }
+            return parseInt(chrHex, 16);
+        }
+
+        function ansiToUnicode(chrCode) {
+            var chrHex = chrCode.toString(16);
+            chrHex = '000' + chrHex.toUpperCase();
+            chrHex = chrHex.substr(chrHex.length - 4);
+            var i = getAnsiCodeChr().indexOf(chrHex);
+            if (i != -1) {
+                chrHex = getUniCode().substr(i, 4);
+            }
+        }
+
+        // 留空的函数，用户自己编辑
+        function getChineseCode() {
+            // 用户自己编辑此函数
+            return '';
+        }
+
+        function getUniCode() {
+            // 用户自己编辑此函数
+            return '';
+        }
+
+        function getAnsiCodeChr() {
+            // 用户自己编辑此函数
+            return '';
+        }
+
+        // 重置变量函数
+        function resetVariables() {
+            gattServer = null;
+            epdService = null;
+            epdCharacteristic = null;
+            rxtxCharacteristic = null;
+            rxtxService = null;
+            document.getElementById("log").value = '';
+        }
+
+        // 错误处理函数
+        async function handleError(error) {
+            console.log(error);
+            resetVariables();
+            if (bleDevice == null)
+                return;
+            if (reconnectTrys <= 5) {
+                reconnectTrys++;
+                await connect();
+            }
+            else {
+                addLog("Was not able to connect, aborting");
+                reconnectTrys = 0;
+            }
+        }
+
+        // 发送EPD命令
+        async function sendCommand(cmd) {
+            if (epdCharacteristic) {
+                await epdCharacteristic.writeValueWithResponse(cmd)
+            } else {
+                addLog('服务不可用。蓝牙连接上了吗？')
+            }
+        }
+
+        // 发送RXTX命令
+        async function rxTxSendCommand(cmd) {
+            if (rxtxCharacteristic) {
+                await rxtxCharacteristic.writeValueWithResponse(cmd);
+            } else {
+                addLog('服务不可用。蓝牙连接上了吗？')
+            }
+        }
+
+        // 断开连接
+        function disconnect() {
+            resetVariables();
+            addLog('连接已断开.');
+            document.getElementById("connectbutton").innerHTML = '连接设备';
+            const statusIndicator = document.querySelector('.status-indicator');
+            statusIndicator.classList.remove('connected');
+        }
+
+        // 蓝牙连接相关函数
+        async function preConnect() {
+            const connectBtn = document.getElementById('connectbutton');
+            const statusIndicator = document.querySelector('.status-indicator');
+            
+            if (gattServer != null && gattServer.connected) {
+                if (bleDevice != null && bleDevice.gatt.connected)
+                    bleDevice.gatt.disconnect();
+            }
+            else {
+                connectBtn.innerHTML = '<div class="loading"></div>正在连接...';
+                connectBtn.disabled = true;
+                
+                try {
+                    reconnectTrys = 0;
+                    bleDevice = await navigator.bluetooth.requestDevice({
+                        filters: [
+                            { namePrefix: "NRF" },
+                        ],
+                        optionalServices: ['0000221f-0000-1000-8000-00805f9b34fb', '00001f10-0000-1000-8000-00805f9b34fb', '13187b10-eba9-a3ba-044e-83d3217d9a38'],
+                        acceptAllDevices: false
+                    });
+                    await bleDevice.addEventListener('gattserverdisconnected', disconnect);
+                    await connect();
+                    
+                    statusIndicator.classList.add('connected');
+                    connectBtn.innerHTML = '断开';
+                    connectBtn.disabled = false;
+                    addLog('✓ 蓝牙连接成功');
+                } catch (error) {
+                    connectBtn.innerHTML = '连接设备';
+                    connectBtn.disabled = false;
+                    addLog('✗ 连接失败: ' + error.message);
+                    await handleError(error);
+                }
+            }
+        }
+
+        async function connectRXTX() {
+            rxtxService = await gattServer.getPrimaryService('00001f10-0000-1000-8000-00805f9b34fb');
+            addLog('> 找到串口服务');
+
+            rxtxCharacteristic = await rxtxService.getCharacteristic('00001f1f-0000-1000-8000-00805f9b34fb');
+            addLog('> 串口服务已连接');
+        }
+
+        async function connect() {
+            if (epdCharacteristic == null) {
+                addLog("正在连接: " + bleDevice.name);
+
+                gattServer = await bleDevice.gatt.connect();
+                addLog('> 找到GATT服务器');
+
+                epdService = await gattServer.getPrimaryService('13187b10-eba9-a3ba-044e-83d3217d9a38');
+                addLog('> 找到可用服务');
+
+                epdCharacteristic = await epdService.getCharacteristic('4b646063-6264-f3a7-8941-e65356ea82fe');
+                addLog('> 服务已连接');
+
+                await epdCharacteristic.startNotifications();
+
+                document.getElementById("connectbutton").innerHTML = '断开';
+                await connectRXTX();
+            }
+        }
+
+        async function reConnect() {
+            connectTrys = 0;
+            if (bleDevice != null && bleDevice.gatt.connected)
+                bleDevice.gatt.disconnect();
+            resetVariables();
+            addLog("重新连接");
+            setTimeout(async function () { await connect(); }, 300);
+        }
+
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            log.value += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // 指令发送函数
+        async function triggerRxTxCmd(cmd) {
+            addLog(`发送指令: ${cmd}`)
+            await rxTxSendCommand(hexToBytes(cmd));
+        }
+
+        async function triggerShowCmd(cmd) {
+            await triggerRxTxCmd(cmd);
+            await delay(150);
+            await triggerRxTxCmd('e2');
+        }
+
+        async function triggerEpdCmd(cmd) {
+            addLog(`发送指令: ${cmd}`)
+            await sendCommand(hexToBytes(cmd));
+        }
+
+        async function setTime() {
+            const { unixNow, localeTimeString, year, month, day, week } = getUnixTime();
+
+            addLog("时间设置为: " + localeTimeString + " : dd" + intToHex(unixNow, 4));
+            await rxTxSendCommand(hexToBytes('dd' +
+                [intToHex(unixNow, 4), intToHex(year, 2), intToHex(month, 1), intToHex(day, 1), intToHex(week, 1)].join('')));
+
+            await delay(150);
+            await rxTxSendCommand(hexToBytes('e2'))
+        }
+
+        async function ModifyTimeZone() {
+            let timezone = document.getElementById('timezone').value;
+            let timezone_hex = intToHex(parseInt(timezone), 1);
+            addLog(`修改时区为: ${timezone_hex}`);
+            await rxTxSendCommand(hexToBytes('e4' + timezone_hex));
+            await delay(150);
+            await rxTxSendCommand(hexToBytes('e2'));
+        }
+
+        async function dev_reg() {
+            const regCode = document.getElementById('reg_code').value;
+            if (!regCode) {
+                alert('请输入激活码');
+                return;
+            }
+            // 这里需要根据实际协议实现激活逻辑
+            addLog(`→ 设备激活: ${regCode}`);
+            await rxTxSendCommand(hexToBytes('ef' + regCode));
+            await delay(150);
+            await rxTxSendCommand(hexToBytes('e2'));
+        }
+
+        function getUnixTime() {
+            const unixNow = Math.round(Date.now() / 1000) - new Date().getTimezoneOffset() * 60;
+            const date = new Date((unixNow + new Date().getTimezoneOffset() * 60) * 1000);
+            const localeTimeString = date.toLocaleTimeString();
+
+            return {
+                unixNow,
+                localeTimeString,
+                year: date.getFullYear(),
+                month: date.getMonth() + 1,
+                day: date.getDate(),
+                week: date.getDay() || 7
+            }
+        }
+
+        // 图片处理函数
+        async function update_image() {
+            const image_file = document.getElementById('image_file');
+            if (image_file.files.length > 0) {
+                const file = image_file.files[0];
+
+                const canvas = document.getElementById("canvas");
+                const ctx = canvas.getContext("2d");
+
+                const image = new Image();
+                image.src = URL.createObjectURL(file);
+                image.onload = function(event) {
+                    URL.revokeObjectURL(this.src);
+                    ctx.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
+                    convert_dithering();
+                    addLog('✓ 图片加载完成');
+                }
+            }
+        }
+
+        function get_position(canvas, x, y) {
+            let rect = canvas.getBoundingClientRect()
+            return {
+                x: x - rect.left * (canvas.width / rect.width),
+                y: y - rect.top * (canvas.height / rect.height)
+            }
+        }
+
+        function clear_canvas() {
+            if (confirm('确认清除画布内容？')) {
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext("2d");
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                addLog('✓ 画布已清空');
+            }
+        }
+
+        function convert_dithering() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext("2d");
+            const mode = document.getElementById('dithering').value;
+            if (mode.startsWith('bwr')) {
+                ditheringCanvasByPalette(canvas, bwrPalette, mode);
+            } else {
+                dithering(ctx, canvas.width, canvas.height, parseInt(document.getElementById('threshold').value), mode);
+            }
+            addLog('✓ 图像抖动处理完成');
+        }
+
+        // 发送图片数据
+        async function sendBufferData(value, type) {
+            addLog(`开始发送图片模式:${type}, 大小 ${value.length/2/1024}KB`);
+            let code = 'ff';
+            if (type === 'bwr') {
+                code = '00';
+            }
+            const step = 480;
+            let partIndex = 0;
+            for (let i = 0; i < value.length; i += step) {
+                addLog(`正在发送第${partIndex+1}块. 块大小: ${step/2 + 4}byte. 起始位置: ${i/2}`);
+                await sendCommand(hexToBytes("03" + code + intToHex(i / 2, 2) + value.substring(i, i + step)));
+                partIndex += 1;
+            }
+        }
+
+        function change_resolution()
+        {
+            //canvas
+            const canvas = document.getElementById('canvas');
+            let resolution = document.getElementById('resolution').value;
+            if(resolution==0)
+            {
+                canvas.width = 212;
+                canvas.height = 104;
+            }
+            else
+            {
+                canvas.width = 250;
+                canvas.height = 122;
+            }
+            update_image();
+        }
+
+        async function upload_image() {
+            const canvas = document.getElementById('canvas');
+            const startTime = new Date().getTime();
+            let image_id = document.getElementById('image_id').value;
+
+            await sendCommand(hexToBytes("80"+image_id));
+            await sendCommand(hexToBytes("0000"));
+            await sendCommand(hexToBytes("020000"));
+            //await sendBufferData(bytesToHex(canvas2bytes(canvas)), 'bw')
+            await sendBufferData(bytesToHex(canvas2bytes(canvas, 250, 122, 'bw')))
+
+            await sendCommand(hexToBytes("0101"))
+
+            addLog(`刷新完成，耗时${(new Date().getTime() - startTime)/1000}s`);
+        }
+
+        async function channel_image() {
+            let image_id = document.getElementById('image_id').value;
+            await triggerRxTxCmd(encodeToGb2312('$'+'IMG('+image_id+',0)'));
+            await rxTxSendCommand(hexToBytes("E2"));
+        }
+
+        function stringToBytes(val) {
+            const result = [];
+            let t;
+            for (let i = 0; i < val.length; i++) {
+                t = val.charCodeAt(i);
+                result.push(t);
+            }
+            return result;
+        }
+
+        async function show_setting(set_cmd) {
+            set_cmds = set_cmd.split("\n");
+
+            let str="";
+            let flag=0;
+            for(let i=0;i<set_cmds.length;i++) {
+                let cmd = set_cmds[i];
+                str+=cmd+"\n";
+                if(str.length>100||i==set_cmds.length-1) {
+                    if(flag==0) {
+                        await triggerRxTxCmd(encodeToGb2312('$'+str));
+                        str="";
+                        flag=1;
+                    }
+                    else {
+                        await triggerRxTxCmd(encodeToGb2312('@'+str));
+                        str="";
+                    }
+                }
+            }
+            await triggerRxTxCmd("E2");
+        }
+
+        // 页面初始化
+        document.body.onload = () => {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let is_allow_drawing = false;
+            let is_allow_move_editor = false;
+            const image_mode = document.getElementById('canvas-mode');
+            const paint_size = document.getElementById('paint-size');
+            const paint_color = document.getElementById('paint-color');
+            const editor = document.getElementById('edit-font');
+            const font = document.getElementById('font');
+            
+            document.getElementById('dithering').value = 'Atkinson';
+            image_mode.value = 'paint';
+            paint_color.value = 'black';
+            font.value = '黑体';
+
+            // 文本编辑器事件
+            editor.onmousemove = function (e) {
+                editor.style.fontSize = `${paint_size.value * 10}px`;
+                editor.style.color = paint_color.value;
+                editor.style.fontFamily = font.value;
+                editor.style.fontWeight = 'bold';
+
+                if (is_allow_move_editor) {
+                    const {x, y} = get_position(canvas, e.clientX, e.clientY);
+                    if (x < 0 || y < 0 || x > canvas.width || y > canvas.height) {
+                        return;
+                    }
+
+                    editor.style.left = `${e.clientX-20}px`;
+                    editor.style.top = `${e.clientY-20}px`;
+                }
+            }
+
+            editor.onmousedown = function (e) {
+                is_allow_move_editor = true;
+            }
+
+            editor.onmouseup = function (e) {
+                is_allow_move_editor = false;
+            }
+
+            document.getElementById('update-text').onclick = function () {
+                if (!editor.value.length) {
+                    alert('请先输入文字内容');
+                    return;
+                }
+                editor.style.display = 'none';
+                ctx.beginPath();
+                ctx.font = `bold ${paint_size.value * 10}px ${font.value}`;
+                ctx.fillStyle = paint_color.value;
+                const {x, y} = get_position(canvas, parseInt(editor.style.left), parseInt(editor.style.top) + paint_size.value * 10);
+
+                ctx.fillText(editor.value, x, y);
+                addLog('✓ 文字已添加到画布');
+            }
+
+            // 模式切换事件
+            image_mode.onchange = function (e) {
+                if (image_mode.value === 'font') {
+                    document.getElementById('update-text').style.display = 'inline-block';
+                    document.getElementById('font').style.display = 'inline-block';
+
+                    editor.style.display = 'block';
+                    editor.style.left = `${e.clientX}px`;
+                    editor.style.top = `${e.clientY}px`;
+                    return;
+                }
+                document.getElementById('update-text').style.display = 'none';
+                document.getElementById('font').style.display = 'none';
+                editor.style.display = 'none';
+            }
+
+            paint_size.onchange = function () {
+                if (image_mode.value === 'font') {
+                    editor.style.fontSize = `${paint_size.value * 10}px`;
+                }
+            }
+
+            paint_color.onchange = function () {
+                if (image_mode.value === 'font') {
+                    editor.style.color = paint_color.value;
+                }
+            }
+
+            font.onchange = function () {
+                if (image_mode.value === 'font') {
+                    editor.style.fontFamily = font.value;
+                }
+            }
+
+            // 画布绘制事件
+            canvas.onmousedown = function(e) {
+                let ele = get_position(canvas, e.clientX, e.clientY)
+                let { x, y } = ele
+
+                switch (image_mode.value) {
+                    case 'paint':
+                        is_allow_drawing = true;
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        break;
+                    case 'font':
+                        editor.style.display = 'block';
+                        editor.style.left = `${e.clientX}px`;
+                        editor.style.top = `${e.clientY}px`;
+                        editor.style.fontSize = `${paint_size.value * 10}px`;
+                        editor.style.color = paint_color.value;
+                        editor.style.fontFamily = font.value;
+                        editor.style.fontWeight = 'bold';
+                        break
+                    default:
+                        break;
+                }
+            };
+
+            canvas.onmousemove = (e) => {
+                let ele = get_position(canvas, e.clientX, e.clientY)
+                let { x, y } = ele;
+                switch (image_mode.value) {
+                    case 'paint':
+                        if (is_allow_drawing) {
+                            ctx.lineWidth = paint_size.value;
+                            ctx.strokeStyle = paint_color.value;
+                            ctx.lineTo(x, y);
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'font':
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            canvas.onmouseup = function() {
+                switch (image_mode.value) {
+                    case 'paint':
+                        is_allow_drawing = false;
+                        break;
+                    case 'font':
+                        editor.focus();
+                        is_allow_move_editor = false;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            canvas.onmouseleave = function () {
+                if (image_mode.value === 'paint') {
+                    is_allow_drawing = false;
+                }
+            }
+
+            addLog('✓ 系统初始化完成');
+        }
+
+        // 标签页切换
+        function showContent(contentId) {
+            const contents = document.querySelectorAll('.content');
+            contents.forEach(content => content.classList.remove('active'));
+
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            document.getElementById(contentId).classList.add('active');
+
+            const activeTab = tabs[contentId.replace('content', '') - 1];
+            activeTab.classList.add('active');
+        }
+    </script>
+
+    <div class="container">
+        <div class="header">
+            <h1>🏷️ 智能电子价签蓝牙控制中心</h1>
+            <p>专业的电子价签管理系统 - 支持2.13英寸价签 (分辨率: 104×212 和 122×250)</p>
+        </div>
+
+        <div class="connection-panel">
+            <div class="connection-buttons">
+                <button id="connectbutton" class="btn btn-success" onclick="preConnect();">
+                    <span class="status-indicator"></span>连接设备
+                </button>
+                <button class="btn btn-warning" onclick="reConnect();">🔄 重新连接</button>
+                <button class="btn btn-info" onclick="document.getElementById('log').value = '';">🗑️ 清空日志</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab" onclick="showContent('content1')">⚙️ 基础控制</div>
+            <div class="tab active" onclick="showContent('content2')">🖼️ 图像处理</div>
+            <div class="tab" onclick="showContent('content3')">🔧 高级设置</div>
+        </div>
+
+        <div id="content1" class="content">
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-title">📡 指令控制</div>
+                    <div class="form-group">
+                        <label class="form-label">自定义指令</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="cmdTXT" value="E2" class="form-control" placeholder="输入指令代码">
+                            <button class="btn" onclick="triggerRxTxCmd(document.getElementById('cmdTXT').value);">发送</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🎮 快捷操作</div>
+                    <div class="button-group">
+                        <button class="btn tooltip" onclick="triggerShowCmd('e100')" data-tooltip="显示上传的图片">📷 图片模式</button>
+                        <button class="btn tooltip" onclick="triggerShowCmd('e101')" data-tooltip="显示日历界面">📅 日历模式</button>
+                        <button class="btn tooltip" onclick="triggerShowCmd('e102')" data-tooltip="显示时钟界面">🕐 时钟模式</button>
+                        <button class="btn tooltip" onclick="triggerShowCmd('e103')" data-tooltip="自定义显示模式">⚡ 自定义模式</button>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn tooltip" onclick="triggerRxTxCmd('e2')" data-tooltip="刷新屏幕显示">🔄 刷新屏幕</button>
+                        <button class="btn tooltip" onclick="triggerRxTxCmd('E001')" data-tooltip="切换显示屏幕">🔀 切换屏幕</button>
+                        <button class="btn tooltip" onclick="triggerRxTxCmd('e3')" data-tooltip="黑白反色显示">🔄 反色显示</button>
+                        <button class="btn tooltip" onclick="setTime()" data-tooltip="同步系统时间">⏰ 同步时间</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🌍 时区设置</div>
+                    <div class="form-group">
+                        <label class="form-label">选择时区</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="timezone" class="form-control form-control-inline">
+                                <option value="-12">UTC-12</option>
+                                <option value="-11">UTC-11</option>
+                                <option value="-10">UTC-10</option>
+                                <option value="-9">UTC-9</option>
+                                <option value="-8">UTC-8</option>
+                                <option value="-7">UTC-7</option>
+                                <option value="-6">UTC-6</option>
+                                <option value="-5">UTC-5</option>
+                                <option value="-4">UTC-4</option>
+                                <option value="-3">UTC-3</option>
+                                <option value="-2">UTC-2</option>
+                                <option value="-1">UTC-1</option>
+                                <option value="0">UTC+0</option>
+                                <option value="1">UTC+1</option>
+                                <option value="2">UTC+2</option>
+                                <option value="3">UTC+3</option>
+                                <option value="4">UTC+4</option>
+                                <option value="5">UTC+5</option>
+                                <option value="6">UTC+6</option>
+                                <option value="7">UTC+7</option>
+                                <option value="8" selected="selected">UTC+8 (北京时间)</option>
+                                <option value="9">UTC+9</option>
+                                <option value="10">UTC+10</option>
+                                <option value="11">UTC+11</option>
+                                <option value="12">UTC+12</option>
+                            </select>
+                            <button class="btn" onclick="ModifyTimeZone()">应用时区</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🔑 设备激活</div>
+                    <div class="form-group">
+                        <label class="form-label">激活码</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="reg_code" class="form-control" placeholder="请输入设备激活码">
+                            <button class="btn" onclick="dev_reg()">激活设备</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content2" class="content active">
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-title">📁 图片上传</div>
+                    <div class="form-group">
+                        <label class="form-label">选择图片文件</label>
+                        <input type="file" id="image_file" onchange="update_image()" accept=".png,.jpg,.bmp,.webp" class="form-control">
+                        <small style="color: #666; margin-top: 5px; display: block;">支持 PNG、JPG、BMP、WebP 格式</small>
+                    </div>
+                    <label class="form-label">分辨率：</label>
+                    <select id="resolution" onchange="change_resolution()" class="form-control form-control-inline">
+                        <option value="0">104*212</option>
+                        <option value="1" selected>122*250</option>
+                    </select>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🎨 图像处理</div>
+                    <div class="form-group">
+                        <label class="form-label">抖动算法</label>
+                        <select id="dithering" class="form-control">
+                            <optgroup label="黑白处理">
+                                <option value="none">二值化处理</option>
+                                <option value="bayer">Bayer 抖动</option>
+                                <option value="floydsteinberg">Floyd-Steinberg 抖动</option>
+                                <option value="Atkinson" selected="selected">Atkinson 抖动 (推荐)</option>
+                            </optgroup>
+                            <optgroup label="三色处理 (黑白红)">
+                                <option value="bwr_floydsteinberg">三色 Floyd-Steinberg</option>
+                                <option value="bwr_Atkinson">三色 Atkinson</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">二值化阈值 (0-255)</label>
+                        <input type="number" max="255" min="0" value="125" id="threshold" class="form-control">
+                    </div>
+                    <div class="button-group">
+                        <button class="btn" onclick="update_image()">🔄 重新处理</button>
+                        <button class="btn btn-warning" onclick="clear_canvas()">🗑️ 清空画布</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">✏️ 绘图工具</div>
+                    <div class="form-group">
+                        <label class="form-label">绘图模式</label>
+                        <select id="canvas-mode" class="form-control">
+                            <option value="paint" selected="selected">🖌️ 画笔绘制</option>
+                            <option value="font">📝 文字输入</option>
+                        </select>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label class="form-label">画笔/文字大小</label>
+                            <input type="number" max="13" min="1" step="1" value="3" id="paint-size" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">颜色选择</label>
+                            <select id="paint-color" class="form-control">
+                                <option value="white">⚪ 白色</option>
+                                <option value="black" selected="selected">⚫ 黑色</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">字体选择</label>
+                        <select id="font" class="form-control" style="display: none;">
+                            <option value="微软雅黑">微软雅黑</option>
+                            <option value="黑体" selected="selected">黑体</option>
+                            <option value="仿宋">仿宋</option>
+                            <option value="宋体">宋体</option>
+                            <option value="楷体_GB2312">楷体</option>
+                            <option value="华文行楷">华文行楷</option>
+                        </select>
+                        <button id="update-text" class="btn" style="display: none">💾 保存文字</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🖼️ 画布预览</div>
+                    <div class="canvas-container">
+                        <input id="edit-font" placeholder="输入文字内容...">
+                        <canvas id="canvas" width="250" height="122"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📤 图片管理</div>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">图片槽位</label>
+                            <select id="image_id" class="form-control form-control-inline">
+                                <option value="0" selected="selected">📷 图片槽 1</option>
+                                <option value="1">📷 图片槽 2</option>
+                                <option value="2">📷 图片槽 3</option>
+                                <option value="3">📷 图片槽 4</option>
+                                <option value="4">📷 图片槽 5</option>
+                                <option value="5">📷 图片槽 6</option>
+                                <option value="6">📷 图片槽 7</option>
+                                <option value="7">📷 图片槽 8</option>
+                            </select>
+                        </div>
+                        <div class="button-group" style="margin-bottom: 0;">
+                            <button class="btn btn-info" onclick="channel_image()">👁️ 显示图片</button>
+                            <button class="btn btn-success" onclick="upload_image()">📤 上传到设备</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content3" class="content">
+            <div class="card">
+                <div class="card-title">⚙️ 高级显示设置</div>
+                <div class="form-group">
+                    <label class="form-label">自定义显示命令</label>
+                    <textarea id="show_setting_cmd" class="form-control" rows="10" placeholder="输入显示设置命令...">RECT(0,0,140,18,0,1,1)
+FONT(5,1,4,1,1,0,'日一二三四五六')
+FONT(5,20,8,0,0,1,'{CAL}')
+FONT(150,2,2,1,0,1,'{y}')
+FONT(150,22,0,2,0,1,'{m}')
+FONT(150,72,0,1,0,1,'{H}:{N}')
+FONT(150,90,0,0,0,1,'{c}')
+FONT(192,90,0,0,0,1,'{b}%')
+FONT(5,92,0,0,0,1,'{VER}')</textarea>
+                    <small style="color: #666; margin-top: 5px; display: block;">
+                        命令格式说明：<br>
+                        • RECT(x,y,w,h,fill,border,color) - 绘制矩形<br>
+                        • FONT(x,y,size,bold,italic,color,'text') - 显示文字<br>
+                        • 变量: {CAL}日历 {y}年 {m}月 {H}时 {N}分 {c}温度 {b}电量 {VER}版本
+                    </small>
+                </div>
+                <button class="btn btn-success" onclick="show_setting(document.getElementById('show_setting_cmd').value)">
+                    🚀 应用显示设置
+                </button>
+            </div>
+        </div>
+
+        <div class="log-container">
+            <div class="log-header">
+                📋 系统日志
+            </div>
+            <textarea id="log" readonly placeholder="系统日志将在这里显示..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 默认显示图像处理标签页
+            showContent('content2');
+        });
+    </script>
+</body>
+</html>
