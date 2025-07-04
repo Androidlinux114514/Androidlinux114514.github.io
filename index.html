@@ -1,0 +1,1981 @@
+<!DOCTYPE html>
+<!-- saved from url=(0030)https://epd.eled.top/webtools/ -->
+<html lang="zh-CN"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能电子价签蓝牙控制中心</title>
+    <link rel="stylesheet" type="text/css" href="./智能电子价签蓝牙控制中心_files/style.css">
+    <script type="application/javascript" src="./智能电子价签蓝牙控制中心_files/dithering.js"></script>
+    <script type="application/javascript" src="./智能电子价签蓝牙控制中心_files/utils.js"></script>
+	<script type="application/javascript" src="./智能电子价签蓝牙控制中心_files/hz_code.js"></script>
+</head>
+
+<body>
+    <script type="application/javascript">
+        let bleDevice;
+        let gattServer;
+        let EpdImgService;
+        let EpdImgCharacteristic;
+
+        let RxTxCmdService;
+        let RxTxCmdCharacteristic;
+
+        //let EpdOtaService;
+        //let EpdOtaCharacteristic;
+        //let EpdOtaStartCharacteristic;
+
+        let reconnectTrys = 0;
+
+        //bleDevice.id = "ItuXjRII0rykZzaQVAPslg==";
+
+        /*const textarea = document.getElementById('show_setting_cmd');
+        const charCountDiv = document.getElementById('charCount');
+        textarea.addEventListener('input', function() {
+            const textLength = textarea.value.length;
+            charCountDiv.textContent = `当前 ${textLength} 字符`;
+        });*/
+
+
+
+        function delay(delayInms) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve(2);
+                }, delayInms);
+            });
+        }
+
+        // 字符串进行gb2312编码
+        function encodeToGb2312(str) {
+            if (!str) {
+                return '';
+            }
+            //return urlEncode(strTrim(str));
+
+            //return str;
+            return urlEncode(str);
+        }
+
+        // 将16进制转decode编码
+        function hex2per(data) {
+            if (data.length % 2) {
+                console.error('16进制数据格式错误');
+                return '';
+            };
+
+            var tmp = [];
+
+            for (let i = 0; i < data.length; i += 2) {
+                tmp.push(data.charAt(i) + data.charAt(i + 1));
+            }
+
+            let str = tmp.join('%');
+
+            return '%' + str;
+        }
+
+        // 字符串进行gb2312解码
+        /*
+        function decodeCnGb2312(s) {
+            var strChn = getChineseCode();
+            var strOut = '';
+            let str = hex2per(s);
+
+            if (str) {
+                for (var i = 0; i < str.length; i++) {
+                    var c = str.charAt(i);
+                    // +是空格
+                    if (c == '+') {
+                        strOut += ' ';
+                    }
+                    // a,b,c,1,2等，非%开头的，直接返回本身
+                    else if (c != '%') {
+                        strOut += c;
+                    }
+                    // %开头
+                    else {
+                        i++;
+                        var nextC = str.charAt(i);
+                        // 数字，则不是汉字
+                        if (!isNaN(parseInt(nextC))) {
+                            i++;
+                            strOut += decodeURIComponent(c + nextC + str.charAt(i));
+                        } else {
+                            var x = new String();
+                            try {
+                                var code = str.substr(i, 2) + str.substr(i + 3, 2);
+                                code = code.toUpperCase();
+                                i = i + 4;
+
+                                var index = -1;
+                                while ((index = strChn.indexOf(code, index + 1)) != -1) {
+                                    if (index % 4 == 0) {
+                                        strOut += String.fromCharCode(index / 4 + 19968);
+                                        break;
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            }
+            return strOut;
+        }*/
+
+        function strTrim(str) {
+            while (str.length > 0 && str.charAt(0) == ' ')
+                str = str.substring(1, str.length);
+            while (str.length > 0 && str.charAt(str.length - 1) == ' ')
+                str = str.substring(0, str.length - 1);
+            str = str.replace(' ', '+');
+            return str;
+        }
+
+        function strReplace(str, a, b) {
+            var i;
+            var s2 = str;
+            while (s2.indexOf(a) > 0) {
+                i = s2.indexOf(a);
+                s2 = s2.substring(0, i) + b + s2.substring(i + 2, s2.length);
+            }
+            return s2;
+        }
+
+        function urlEncode(strInput) {
+            var str = strInput.replace(/(script)/g, '');
+            str = str.replace(/(javascript)/g, '');
+            str = str.replace(/(alert)/g, '');
+            str = str.replace(/(style)/g, '');
+            //str = str.replace(/(<)/g, '');
+            //str = str.replace(/(>)/g, '');
+            //str = strReplace(str, '/', '');
+            var Sys = {};
+            var ua = (navigator && navigator.userAgent.toLowerCase()) || 'chrome';
+            var s;
+            (s = ua.match(/msie ([\d.]+)/))
+                ? (Sys.ie = s[1])
+                : (s = ua.match(/firefox\/([\d.]+)/))
+                ? (Sys.firefox = s[1])
+                : (s = ua.match(/chrome\/([\d.]+)/))
+                ? (Sys.chrome = s[1])
+                : (s = ua.match(/opera.([\d.]+)/))
+                ? (Sys.opera = s[1])
+                : (s = ua.match(/version\/([\d.]+).*safari/))
+                ? (Sys.safari = s[1])
+                : 0;
+
+            if (Sys.firefox || Sys.chrome) {
+                return urlEncodeV2(str);
+            }
+            if (strInput) {
+                if (window && window.execScript) {
+                    str = str.replace(/./g, function (sHex) {
+                        window.EnCodeStr = '';
+                        window.sHex = sHex;
+                        window.execScript('window.EnCodeStr=Hex(Asc(window.sHex))', 'vbscript');
+                        return window.EnCodeStr.replace(/../g, '%$&');
+                    });
+                }
+                return str;
+            } else {
+                return '';
+            }
+        }
+
+        function urlEncodeV2(str) {
+            var ret = '';
+            var strSpecial = '!"#$%&\'()*+,/:;<=>?[]^`{|}~%';
+
+            for (var i = 0; i < str.length; i++) {
+                var chr = str.charAt(i);
+                var c = strToAsc(chr);
+                var tt = '';
+                tt += chr + ':' + c + 'n';
+                if (parseInt('0x' + c) > 0x7f) {
+                    ret += c.slice(0, 2) + c.slice(-2);
+                } else {
+                    if (parseInt('0x' + c) < 0x10) {
+                        ret += '0' + c.toString(16);
+                    } else {
+                        ret += c.toString(16);
+                    }
+                }
+            }
+            return ret;
+        }
+
+        function urlDecodeV2(str) {
+            var ret = '';
+            for (var i = 0; i < str.length; i++) {
+                var chr = str.charAt(i);
+                if (chr == '+') {
+                    ret += '';
+                } else if (chr == '%') {
+                    var asc = str.substring(i + 1, i + 3);
+                    if (parseInt('0x' + asc) > 0x7f) {
+                        ret += ascToStr(parseInt('0x' + asc + str.substring(i + 4, i + 6)));
+                        i += 5;
+                    } else {
+                        ret += ascToStr(parseInt('0x' + asc));
+                        i += 2;
+                    }
+                } else {
+                    ret += chr;
+                }
+            }
+            return ret;
+        }
+
+        function strToAsc(str) {
+            var n = unicodeToAnsi(str.charCodeAt(0));
+            var s = n.toString(16);
+            return s.toUpperCase();
+        }
+
+        function ascToStr(code) {
+            var n = ansiToUnicode(code);
+            return String.fromCharCode(n);
+        }
+
+        function unicodeToAnsi(chrCode) {
+            var chrHex = chrCode.toString(16);
+            chrHex = '000' + chrHex.toUpperCase();
+            chrHex = chrHex.substr(chrHex.length - 4);
+            var i = getUniCode().indexOf(chrHex);
+            if (i != -1) {
+                chrHex = getAnsiCodeChr().substr(i, 4);
+            }
+            return parseInt(chrHex, 16);
+        }
+
+        function ansiToUnicode(chrCode) {
+            var chrHex = chrCode.toString(16);
+            chrHex = '000' + chrHex.toUpperCase();
+            chrHex = chrHex.substr(chrHex.length - 4);
+            var i = getAnsiCodeChr().indexOf(chrHex);
+            if (i != -1) {
+                chrHex = getUniCode().substr(i, 4);
+            }
+        }
+
+        // 重置变量函数
+        function resetVariables() {
+            gattServer = null;
+            EpdImgService = null;
+            //EpdOtaService = null;
+            EpdImgCharacteristic = null;
+            //EpdOtaCharacteristic = null;
+            //EpdOtaStartCharacteristic = null;
+            RxTxCmdCharacteristic = null;
+            RxTxCmdService = null;
+            //document.getElementById("log").value = '';
+        }
+
+        // 错误处理函数
+        async function handleError(error) {
+            console.log(error);
+            resetVariables();
+            if (bleDevice == null)
+                return;
+            if (reconnectTrys <= 5) {
+                reconnectTrys++;
+                await connect();
+            }
+            else {
+                addLog("Was not able to connect, aborting");
+                reconnectTrys = 0;
+            }
+        }
+
+        // 发送EPD命令
+        async function sendImgCommand(cmd) {
+            if (EpdImgCharacteristic) {
+                await EpdImgCharacteristic.writeValueWithResponse(cmd);
+            } else {
+                addLog('服务不可用。蓝牙连接上了吗？');
+            }
+        }
+        async function  SendOtaCommand(cmd) {
+            /**if(EpdOtaCharacteristic){
+                await EpdOtaCharacteristic.writeValueWithResponse(cmd);
+            }
+            else{
+                addLog('服务不可用。蓝牙连接上了吗？');
+            }*/
+        }
+
+        async function SendOtaStartCommand(cmd) {
+            /*if(EpdOtaStartCharacteristic){
+                await EpdOtaStartCharacteristic.writeValueWithResponse(cmd);
+            }
+            else{
+                addLog('服务不可用。蓝牙连接上了吗？');
+            }*/
+        }
+
+        // 发送RXTX命令
+        // 发送cmd
+        async function rxTxSendCommand(cmd) {
+            if (RxTxCmdCharacteristic) {
+                await RxTxCmdCharacteristic.writeValueWithResponse(cmd);
+            } else {
+                addLog('服务不可用。蓝牙连接上了吗？')
+            }
+        }
+
+
+        // 断开连接
+        function disconnect() {
+            resetVariables();
+            addLog('连接已断开.');
+            document.getElementById("connectbutton").innerHTML = '连接设备';
+            const statusIndicator = document.querySelector('.status-indicator');
+            statusIndicator.classList.remove('connected');
+        }
+
+        // 蓝牙连接相关函数
+        async function preConnect() {
+            if('bluetooth' in navigator)
+            {
+            }
+            else
+            {
+                alert('您的浏览器不支持蓝牙功能，请使用EDGE、Chrome或Firefox浏览器！');
+                return;
+            }
+            const connectBtn = document.getElementById('connectbutton');
+            const statusIndicator = document.querySelector('.status-indicator');
+
+            if (gattServer != null && gattServer.connected) {
+                if (bleDevice != null && bleDevice.gatt.connected)
+                    bleDevice.gatt.disconnect();
+            }
+            else {
+                connectBtn.innerHTML = '<div class="loading"></div>正在连接...';
+                connectBtn.disabled = true;
+
+                try {
+                    reconnectTrys = 0;
+                    bleDevice = await navigator.bluetooth.requestDevice({
+                        filters: [
+                            { namePrefix: "NRF" },
+                        ],
+                        optionalServices: [
+                            '0000221f-0000-1000-8000-00805f9b34fb',//CMD
+                            '00001f10-0000-1000-8000-00805f9b34fb',//CMD
+                            '0000fef5-0000-1000-8000-00805f9b34fb',//OTA
+                            '13187b10-eba9-a3ba-044e-83d3217d9a38'//IMG
+                        ],
+                        acceptAllDevices: false
+                    });
+                    console.log(bleDevice);
+                    await bleDevice.addEventListener('gattserverdisconnected', disconnect);
+                    await connect();
+
+                    statusIndicator.classList.add('connected');
+                    connectBtn.innerHTML = '断开';
+                    connectBtn.disabled = false;
+                    addLog('✓ 蓝牙连接成功');
+                } catch (error) {
+                    connectBtn.innerHTML = '连接设备';
+                    connectBtn.disabled = false;
+                    addLog('✗ 连接失败: ' + error.message);
+                    await handleError(error);
+                }
+            }
+        }
+
+        async function connectRXTX() {
+            console.log('connectRXTX');
+            addLog('>未登录，请先登录，如果没有账号，请购买价签后联系管理员！');
+        }
+
+        async function connect() {
+
+            if (EpdImgCharacteristic == null) {
+                addLog("正在连接: " + bleDevice.name);
+                addLog("正在连接: " + bleDevice.id);
+                //jogem6FwsButD8iS1qZk0g==
+                //jogem6FwsButD8iS1qZk0g==
+                //8E881E9BA170B01BAD0FC892D6A664D2
+                //NRF-81F01E
+                //ja+BHS60b+4eC/30SN8Vug==
+                //8DAF811D2EB46FEE1E0BFDF448DF15BA
+                addLog("正在连接: " + bleDevice.gatt.connected);
+                console.log(bleDevice);
+
+                gattServer = await bleDevice.gatt.connect();
+                addLog('> 找到GATT服务器');
+
+                EpdImgService = await gattServer.getPrimaryService('13187b10-eba9-a3ba-044e-83d3217d9a38');
+                addLog('> 找到IMG可用服务');
+                EpdImgCharacteristic = await EpdImgService.getCharacteristic('4b646063-6264-f3a7-8941-e65356ea82fe');
+                addLog('> IMG服务已连接');
+                await EpdImgCharacteristic.startNotifications();
+
+
+                /*EpdOtaService = await gattServer.getPrimaryService('0000fef5-0000-1000-8000-00805f9b34fb');
+                addLog('> 找到OTA可用服务');
+                EpdOtaCharacteristic = await EpdOtaService.getCharacteristic('457871e8-d516-4ca1-9116-57d0b17b9cb2');
+                addLog('> OTA服务已连接');
+                // 8082CAA8-41A6-4021-91C6-56F9B954CC34
+                //8082caa8-41a6-4021-91c6-56f9b954cc34
+                EpdOtaStartCharacteristic = await EpdOtaService.getCharacteristic('8082caa8-41a6-4021-91c6-56f9b954cc34');
+
+                await EpdOtaCharacteristic.startNotifications();
+                await EpdOtaStartCharacteristic.startNotifications();*/
+
+
+                document.getElementById("connectbutton").innerHTML = '断开';
+                await connectRXTX();
+            }
+        }
+
+        async function reConnect() {
+            connectTrys = 0;
+            if (bleDevice != null && bleDevice.gatt.connected)
+                bleDevice.gatt.disconnect();
+            resetVariables();
+            addLog("重新连接");
+            setTimeout(async function () { await connect(); }, 300);
+        }
+
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            log.value += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // 指令发送函数
+        async function triggerRxTxCmd(cmd) {
+            addLog(`发送指令: ${cmd}`)
+            await rxTxSendCommand(hexToBytes(cmd));
+        }
+
+        async function otaRxTxCmd(cmd) {
+            addLog(`发送OTA指令: ${cmd}`)
+            await SendOtaCommand(hexToBytes(cmd));
+        }
+
+        async function otaStartRxTxCmd(cmd) {
+            addLog(`发送OTA启动指令: ${cmd}`)
+            await SendOtaStartCommand(hexToBytes(cmd));
+        }
+
+        async function triggerShowCmd(cmd) {
+            await triggerRxTxCmd(cmd);
+            await delay(150);
+            await triggerRxTxCmd('e2');
+        }
+
+        async function triggerEpdCmd(cmd) {
+            addLog(`发送指令: ${cmd}`)
+            await sendImgCommand(hexToBytes(cmd));
+        }
+
+        async function setTime() {
+            const { unixNow, localeTimeString, year, month, day, week } = getUnixTime();
+
+            addLog("时间设置为: " + localeTimeString + " : dd" + intToHex(unixNow, 4));
+            await rxTxSendCommand(hexToBytes('dd' +
+                [intToHex(unixNow, 4), intToHex(year, 2), intToHex(month, 1), intToHex(day, 1), intToHex(week, 1)].join('')));
+
+            await delay(150);
+            await rxTxSendCommand(hexToBytes('e2'))
+        }
+
+        async function ModifyTimeZone() {
+            let timezone = document.getElementById('timezone').value;
+            let timezone_hex = intToHex(parseInt(timezone), 1);
+            addLog(`修改时区为: ${timezone_hex}`);
+            await rxTxSendCommand(hexToBytes('e4' + timezone_hex));
+            await delay(150);
+            await rxTxSendCommand(hexToBytes('e2'));
+        }
+
+        async function ModifyRefreshMode()
+        {
+            let refresh_mode = document.getElementById('refresh_mode').value;
+            let refresh_mode_hex = intToHex(parseInt(refresh_mode), 1);
+            addLog(`修改刷新模式为: ${refresh_mode_hex}`);
+            await rxTxSendCommand(hexToBytes('e5' + refresh_mode_hex));
+            await delay(150);
+            await rxTxSendCommand(hexToBytes('e2'));
+        }
+
+        async function dev_reg() {
+            const regCode = document.getElementById('reg_code').value;
+            if (!regCode) {
+                alert('请输入激活码');
+                return;
+            }
+            // 这里需要根据实际协议实现激活逻辑
+            addLog(`→ 设备激活: ${regCode}`);
+            await rxTxSendCommand(hexToBytes('ef' + regCode));
+            await delay(150);
+            await rxTxSendCommand(hexToBytes('e2'));
+        }
+
+        function getUnixTime() {
+            const unixNow = Math.round(Date.now() / 1000) - new Date().getTimezoneOffset() * 60;
+            const date = new Date((unixNow + new Date().getTimezoneOffset() * 60) * 1000);
+            const localeTimeString = date.toLocaleTimeString();
+
+            return {
+                unixNow,
+                localeTimeString,
+                year: date.getFullYear(),
+                month: date.getMonth() + 1,
+                day: date.getDate(),
+                week: date.getDay() || 7
+            }
+        }
+
+        // 图片处理函数
+        async function update_image() {
+            const image_file = document.getElementById('image_file');
+            if (image_file.files.length > 0) {
+                const file = image_file.files[0];
+
+                const canvas = document.getElementById("canvas");
+                const ctx = canvas.getContext("2d");
+
+                const image = new Image();
+                image.src = URL.createObjectURL(file);
+                image.onload = function(event) {
+                    URL.revokeObjectURL(this.src);
+                    ctx.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
+                    convert_dithering();
+                    addLog('✓ 图片加载完成');
+                }
+            }
+        }
+
+        function get_position(canvas, x, y) {
+            let rect = canvas.getBoundingClientRect();
+            //console.log(rect);
+            return {
+                x: x - rect.left * (canvas.width / rect.width)-5,
+                y: y - rect.top * (canvas.height / rect.height)-32
+            }
+        }
+
+        function clear_canvas() {
+            if (confirm('确认清除画布内容？')) {
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext("2d");
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                addLog('✓ 画布已清空');
+            }
+        }
+
+        function convert_dithering() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext("2d");
+            const mode = document.getElementById('dithering').value;
+            if (mode.startsWith('bwr')) {
+                ditheringCanvasByPalette(canvas, bwrPalette, mode);
+            } else {
+                dithering(ctx, canvas.width, canvas.height, parseInt(document.getElementById('threshold').value), mode);
+            }
+            addLog('✓ 图像抖动处理完成');
+        }
+
+        // 发送图片数据
+        async function sendBufferData(value, type) {
+            addLog(`开始发送图片模式:${type}, 大小 ${value.length/2/1024}KB`);
+            let code = 'ff';
+            if (type === 'bwr') {
+                code = '00';
+            }
+            const step = 480;
+            let partIndex = 0;
+            for (let i = 0; i < value.length; i += step) {
+                let part_len = step;
+                if (i + step > value.length) {
+                    part_len = value.length - i;
+                }
+                addLog(`正在发送第${partIndex+1}块. 块大小: ${part_len/2 + 4}byte. 起始位置: ${i/2}`);
+                await sendImgCommand(hexToBytes("03" + code + intToHex(i / 2, 2) + value.substring(i, i + step)));
+                partIndex += 1;
+            }
+        }
+
+		function getBufferData(value, type, img_interval) {
+
+			addLog(`获取数据:${type}, 大小 ${value.length/2/1024}KB`);
+			let code = 'ff';
+			if (type === 'bwr') {
+				code = '00';
+			}
+			const step = (img_interval-4)*2;
+
+			let partIndex = 0;
+			dat = "";
+            dat += "8000".padEnd(img_interval*2, '0');
+            dat += "0000".padEnd(img_interval*2, '0');
+            dat += "020000".padEnd(img_interval*2, '0');
+			for (let i = 0; i < value.length; i += step) {
+				//addLog(value.substring(i, i + step));
+				//await sendImgCommand(hexToBytes("03" + code + intToHex(i / 2, 2) + value.substring(i, i + step)));
+				dat+="03" + code + intToHex(i / 2, 2) + value.substring(i, i + step);
+				partIndex += 1;
+			}
+            console.log(dat.length);
+            console.log(dat.length+img_interval*2-dat.length%(img_interval*2));
+            if(dat.length%(img_interval*2)!=0)
+            {
+                dat = dat.padEnd(dat.length+img_interval*2-dat.length%(img_interval*2), '0');
+            }
+            dat += "0101".padEnd(img_interval*2, '0');
+            addLog(dat);
+			return dat;
+		}
+
+        function change_resolution()
+        {
+            //canvas
+            const canvas = document.getElementById('canvas');
+            let resolution = document.getElementById('resolution').value;
+            if(resolution==0)
+            {
+                canvas.width = 212;
+                canvas.height = 104;
+            }
+            else
+            {
+                canvas.width = 250;
+                canvas.height = 122;
+            }
+            update_image();
+        }
+
+        async function upload_image() {
+            const canvas = document.getElementById('canvas');
+            const startTime = new Date().getTime();
+            let image_id = document.getElementById('image_id').value;
+
+            await sendImgCommand(hexToBytes("80"+image_id));
+            await sendImgCommand(hexToBytes("0000"));
+            await sendImgCommand(hexToBytes("020000"));
+            //await sendBufferData(bytesToHex(canvas2bytes(canvas)), 'bw')
+            await sendBufferData(bytesToHex(canvas2bytes(canvas, 250, 122, 'bw')))
+
+            await sendImgCommand(hexToBytes("0101"))
+
+            channel_image();
+
+            addLog(`刷新完成，耗时${(new Date().getTime() - startTime)/1000}s`);
+        }
+
+        async function channel_image() {
+            let image_id = document.getElementById('image_id').value;
+            await triggerRxTxCmd(encodeToGb2312('$'+'IMG('+image_id+',0)'));
+            await rxTxSendCommand(hexToBytes("E2"));
+        }
+
+        async function image_saveas(img_interval)
+        {
+            const canvas = document.getElementById('canvas');
+            let img_data = hexToBytes(getBufferData(bytesToHex(canvas2bytes(canvas, 250, 122, 'bw')), 'bw', img_interval));
+            let binaryData = new Uint8Array(img_data);
+            let blob = new Blob([binaryData], {type: 'application/octet-stream'});
+            // 创建一个URL指向这个Blob对象
+            let url = URL.createObjectURL(blob);
+            // 创建一个<a>标签
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = 'img_data.bin'; // 设置下载的文件名
+            // 将<a>标签添加到文档中并触发点击事件
+            document.body.appendChild(a);
+            a.click();
+            // 清理：移除<a>标签并释放URL对象
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+
+        function stringToBytes(val) {
+            const result = [];
+            let t;
+            for (let i = 0; i < val.length; i++) {
+                t = val.charCodeAt(i);
+                result.push(t);
+            }
+            return result;
+        }
+
+
+        async function show_setting(set_cmd) {
+            set_cmds = set_cmd.split("\n");
+            let str="";
+            let flag=0;
+            for(let i=0;i<set_cmds.length;i++) {
+                let cmd = set_cmds[i];
+                str+=cmd+"\n";
+                if(str.length>80||i==set_cmds.length-1) {
+                    if(flag==0) {
+                        await triggerRxTxCmd(encodeToGb2312('$'+str));
+                        str="";
+                        flag=1;
+                    }
+                    else {
+                        await triggerRxTxCmd(encodeToGb2312('@'+str));
+                        str="";
+                    }
+                }
+            }
+            await triggerRxTxCmd("E2");
+        }
+
+		function show_setting_saveas(set_cmd)
+		{
+			console.log(set_cmd);
+
+			//send server
+			//_saveas_show_cmd.php
+			const url = "./_saveas_show_cmd.php";
+			//const set_cmd = set_cmd;
+
+			const xhr = new XMLHttpRequest();
+			xhr.open("POST", url, true);
+			//xhr.setRequestHeader("Content-Type", "application/json");
+			xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+			xhr.send('show_cmd='+encodeURIComponent(set_cmd));//发送请求 将情头体写在send中
+
+			xhr.onreadystatechange = function () {
+				if (xhr.readyState === 4 && xhr.status === 200) {
+					console.log("成功:", xhr.responseText);
+				} else if (xhr.readyState === 4) {
+					console.error("错误:", xhr.statusText);
+				}
+			};
+		}
+
+        async function sendFontBufferData(index, value) {
+            addLog(`开始发送自定义字库:${index}, 大小 ${value.length/2/1024}KB`);
+            console.log(`开始发送自定义字库:${index}, 大小 ${value.length/2/1024}KB`);
+
+            let code = 'ff';
+            const step = 256;
+            let partIndex = 0;
+            console.log("81"+index);
+            await sendImgCommand(hexToBytes("81"+intToHex(index,1)));//start
+            for (let i = 0; i < value.length; i += step) {
+                let part_len = step;
+                if (i + step > value.length) {
+                    part_len = value.length - i;
+                }
+                addLog(`正在发送第${partIndex+1}块. 块大小: ${part_len/2 + 4}byte. 起始位置: ${i/2}`);
+                console.log(`正在发送第${partIndex+1}块. 块大小: ${part_len/2 + 4}byte. 起始位置: ${i/2}`);
+                console.log("91" + code + intToHex(i / 2, 2) + value.substring(i, i + step));
+                await sendImgCommand(hexToBytes("03" + code + intToHex(i / 2, 2) + value.substring(i, i + step)));
+                partIndex += 1;
+            }
+            console.log("92");
+            await sendImgCommand(hexToBytes("92"));
+        }
+
+        async function sendShowCommand(index, value)
+        {
+            addLog(`开始发送自定义显示数据:${index}, 大小 ${value.length/2}B`);
+            console.log(`开始发送自定义显示数据:${index}, 大小 ${value.length/2}B`);
+
+            let code = 'ff';
+            const step = 256;
+            let partIndex = 0;
+            console.log("82"+index);
+            await sendImgCommand(hexToBytes("82"+intToHex(index,1)));//start
+            for (let i = 0; i < value.length; i += step) {
+                let part_len = step;
+                if (i + step > value.length) {
+                    part_len = value.length - i;
+                }
+                addLog(`正在发送第${partIndex+1}块. 块大小: ${part_len/2 + 4}byte. 起始位置: ${i/2}`);
+                console.log(`正在发送第${partIndex+1}块. 块大小: ${part_len/2 + 4}byte. 起始位置: ${i/2}`);
+                console.log("91" + code + intToHex(i / 2, 2) + value.substring(i, i + step));
+                await sendImgCommand(hexToBytes("03" + code + intToHex(i / 2, 2) + value.substring(i, i + step)));
+                partIndex += 1;
+            }
+            console.log("94");
+            await sendImgCommand(hexToBytes("94"));
+        }
+
+        async function sendFontBuffer(value)
+        {
+            //font_str_data=bytesToHex(value);
+            font_str_data = value;
+            const step = 4096*2;
+            await sendImgCommand(hexToBytes("81"+intToHex(0,1)));
+            delay(1000);
+            for(let i=0;i<font_str_data.length;i+=step)
+            {
+                console.log(i);
+                await sendFontBufferData(i/step, font_str_data.substring(i,i+step));
+            }
+            await sendImgCommand(hexToBytes("93"));
+            delay(100);
+
+        }
+
+        async function sendShowBuffer(value)
+        {
+            //font_str_data=bytesToHex(value);
+            show_str_data = value;
+            const step = 4096*2;
+            await sendImgCommand(hexToBytes("82"+intToHex(0,1)));
+            delay(1000);
+            for(let i=0;i<show_str_data.length;i+=step)
+            {
+                console.log(i);
+                //await sendShowCommand(hexToBytes("03"+show_str_data.substring(i,i+step)));
+                //await sendShowCommand(hexToBytes(show_str_data.substring(i,i+step)));
+                console.log(i);
+                await sendShowCommand(i/step, show_str_data.substring(i,i+step));
+            }
+            await sendImgCommand(hexToBytes("93"));
+            delay(100);
+
+        }
+
+        async function down_show_code()
+        {
+            files = document.getElementById('show_file').files;
+            console.log(files);
+            const file_arr = [...files].map(v=>{
+                return v.slice(0, v.size)
+            })
+            console.log(file_arr);
+
+            file_str = "";
+            let file_size_arry=[];
+            let file_id=[];
+            for(var f in file_arr)
+            {
+                await file_arr[f].arrayBuffer().then(arrayBuffer => {
+                    // 输出转换后的 ArrayBuffer 数据
+                    //console.log(bytesToHex(arrayBuffer));
+
+                    let f_str = bytesToHex(arrayBuffer);
+                    file_size_arry[f] = f_str.length/2;
+                    //file_str += f_str+"00";
+                    file_str += intToHex(f_str.length/2,2) + f_str+"00";
+                    file_id[f]=arrayBuffer.slice(0,1);
+                    console.log(arrayBuffer);
+                    console.log(arrayBuffer.slice(0,1));
+                    console.log(bytesToHex(arrayBuffer));
+                });
+            }
+            console.log("file_id:", file_id);
+            console.log("file_str:", file_str);
+            console.log("strlen:", file_str.length/2);
+
+            let file_offset_arry=[];
+            let file_count = file_arr.length;
+            console.log("file_count:", file_count);
+            for(var f in file_size_arry)
+            {
+                if(f==0)
+                {
+                    file_offset_arry[f] = 12+file_count*4;
+                }
+                else
+                {
+                    file_offset_arry[f] = file_offset_arry[f-1]+file_size_arry[f-1]+3;
+                }
+            }
+            let file_size = file_str.length/2;
+            console.log("file_size:", file_size);
+            console.log("file_size_arry:", file_size_arry);
+            console.log("file_offset_arry:", file_offset_arry);
+            console.log(file_str);
+
+            let file_str_data = "";
+
+            file_str_data = "";
+            file_str_data = "574F4853";
+            file_str_data += intToHex(file_count, 2);
+            file_str_data += intToHex(file_size, 2);
+            file_str_data += "00000000";//CRC
+
+            for(var f in file_offset_arry)
+            {
+                file_str_data += intToHex(f, 1);
+                const array = new Int8Array(file_id[f]);
+                console.log("file_id:", array[0]);
+                if(array[0]==0x30)
+                {
+                    file_str_data += "00";//id
+                }
+                else if(array[0]==0x31)
+                {
+                    file_str_data += "01";//id
+                }
+                else if(array[0]==0x32)
+                {
+                    file_str_data += "02";//id
+                }
+                else
+                {
+                    file_str_data += "00";//id
+                }
+                file_str_data += intToHex(file_offset_arry[f], 2);
+                //console.log("file_id:", file_id[f].getInt8(0));
+            }
+            file_str_data += file_str;
+
+            console.log(file_str_data);
+
+            sendShowBuffer(file_str_data);
+
+        }
+
+        async function down_font_code(file)
+        {
+            files = document.getElementById('font_file').files;
+            console.log(files);
+
+            const file_arr = [...files].map(v=>{
+                return v.slice(0, v.size)
+            })
+            //console.log(file_arr);
+            //console.log(bytesToHex(file_arr[0]));
+            file_str = "";
+            let file_size_arry=[];
+            let file_id=[];
+            for(var f in file_arr)
+            {
+                await file_arr[f].arrayBuffer().then(arrayBuffer => {
+                    // 输出转换后的 ArrayBuffer 数据
+                    //console.log(bytesToHex(arrayBuffer));
+                    let f_str = bytesToHex(arrayBuffer);
+                    file_size_arry[f] = f_str.length/2;
+                    file_str += f_str;
+                    file_id[f]=arrayBuffer[0];
+                    console.log(arrayBuffer);
+                    console.log(arrayBuffer.slice(0,1));
+                    console.log(bytesToHex(arrayBuffer));
+                });
+            }
+            console.log("file_id:", file_id);
+            let file_offset_arry=[];
+            let file_count = file_arr.length;
+            console.log("file_count:", file_count);
+            for(var f in file_size_arry)
+            {
+                if(f==0)
+                {
+                    file_offset_arry[f] = 12+file_count*4;
+
+                }
+                else
+                {
+                    file_offset_arry[f] = file_offset_arry[f-1]+file_size_arry[f-1];
+                }
+            }
+            let file_size = file_str.length/2;
+            console.log("file_size:", file_size);
+            console.log("file_size_arry:", file_size_arry);
+            console.log("file_offset_arry:", file_offset_arry);
+            console.log(file_str);
+
+            let file_str_data = "";
+
+            file_str_data = "";
+            file_str_data = "464F4E54";
+            file_str_data += intToHex(file_count, 2);
+            file_str_data += intToHex(file_size, 2);
+            file_str_data += "00000000";//CRC
+
+            for(var f in file_offset_arry)
+            {
+                file_str_data += intToHex(f, 1);
+                file_str_data += "00";//id
+                file_str_data += intToHex(file_offset_arry[f], 2);
+            }
+            file_str_data += file_str;
+
+            console.log(file_str_data);
+
+            sendFontBuffer(file_str_data);
+        }
+
+        async function ota_code(file)
+        {
+            console.log(file);
+
+            let strArr = [];
+            await file.arrayBuffer().then(arrayBuffer => {
+                    // 输出转换后的 ArrayBuffer 数据
+                    let f_str = bytesToHex(arrayBuffer);
+                    let file_size_arry = f_str.length/2;
+
+                    let a1 = f_str.split('');
+                    a1[4]='f';
+                    a1[5]='f';
+                    let a2 = a1.join('');
+                    a2 += "72";
+                    let file_str = a2;
+                    console.log(file_str);
+                    let num = 244*2;
+                    for (let i = 0; i < file_str.length; i += num)
+                    {
+                        strArr.push(file_str.slice(i, i + num));
+                    }
+
+                    console.log(strArr);
+
+
+                    //let file_id=arrayBuffer[0];
+                    //console.log(arrayBuffer);
+                    //console.log(arrayBuffer.slice(0,1));
+                    //console.log(bytesToHex(arrayBuffer));
+                });
+
+                await otaStartRxTxCmd("00000013");
+                for(var i in strArr)
+                {
+                    console.log(strArr[i]);
+                    await otaRxTxCmd(strArr[i]);
+                }
+                await otaStartRxTxCmd("000000FE");
+
+        }
+
+        async function save_show_code(file)
+        {
+            files = document.getElementById('show_file').files;
+            console.log(files);
+            const file_arr = [...files].map(v=>{
+                return v.slice(0, v.size)
+            })
+            console.log(file_arr);
+
+            file_str = "";
+            let file_size_arry=[];
+            let file_id=[];
+            for(var f in file_arr)
+            {
+                await file_arr[f].arrayBuffer().then(arrayBuffer => {
+                    // 输出转换后的 ArrayBuffer 数据
+                    //console.log(bytesToHex(arrayBuffer));
+                    let f_str = bytesToHex(arrayBuffer);
+                    console.log("f_str:", f_str, intToHex(f_str.length,2) );
+                    file_size_arry[f] = f_str.length/2;
+                    file_str += intToHex(f_str.length/2,2) + f_str+"00";
+                    file_id[f]=arrayBuffer.slice(0,1);
+                    console.log(arrayBuffer);
+                    console.log(arrayBuffer.slice(0,1));
+                    console.log(bytesToHex(arrayBuffer));
+                });
+            }
+            console.log("file_id:", file_id);
+            console.log("file_str:", file_str);
+            console.log("strlen:", file_str.length/2);
+
+            let file_offset_arry=[];
+            let file_count = file_arr.length;
+            console.log("file_count:", file_count);
+            for(var f in file_size_arry)
+            {
+                if(f==0)
+                {
+                    file_offset_arry[f] = 12+file_count*4;
+                }
+                else
+                {
+                    file_offset_arry[f] = file_offset_arry[f-1]+file_size_arry[f-1]+3;
+                }
+            }
+            let file_size = file_str.length/2;
+            console.log("file_size:", file_size);
+            console.log("file_size_arry:", file_size_arry);
+            console.log("file_offset_arry:", file_offset_arry);
+            console.log(file_str);
+
+            let file_str_data = "";
+
+            file_str_data = "";
+            file_str_data = "574F4853";
+            file_str_data += intToHex(file_count, 2);
+            file_str_data += intToHex(file_size, 2);
+            file_str_data += "00000000";//CRC
+
+            for(var f in file_offset_arry)
+            {
+                file_str_data += intToHex(f, 1);
+                const array = new Int8Array(file_id[f]);
+                console.log("file_id:", array[0]);
+                if(array[0]==0x30)
+                {
+                    file_str_data += "00";//id
+                }
+                else if(array[0]==0x31)
+                {
+                    file_str_data += "01";//id
+                }
+                else if(array[0]==0x32)
+                {
+                    file_str_data += "02";//id
+                }
+                else
+                {
+                    file_str_data += "00";//id
+                }
+                file_str_data += intToHex(file_offset_arry[f], 2);
+                //console.log("file_id:", file_id[f].getInt8(0));
+            }
+            file_str_data += file_str;
+
+            console.log(file_str_data);
+
+            //sendFontBuffer(file_str_data);
+
+            let binaryData = new Uint8Array(hexToBytes(file_str_data));
+            let blob = new Blob([binaryData], {type: 'application/octet-stream'});
+            //let blob = new Blob(file_arr, {type: 'application/octet-stream'});
+            // 创建一个URL指向这个Blob对象
+            let url = URL.createObjectURL(blob);
+
+            // 创建一个<a>标签
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = 'show_cmd_file.bin'; // 设置下载的文件名
+
+            // 将<a>标签添加到文档中并触发点击事件
+            document.body.appendChild(a);
+            a.click();
+
+            // 清理：移除<a>标签并释放URL对象
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function save_font_code(file)
+        {
+            files = document.getElementById('font_file').files;
+            console.log(files);
+
+            const file_arr = [...files].map(v=>{
+                return v.slice(0, v.size)
+            })
+            //console.log(file_arr);
+            //console.log(bytesToHex(file_arr[0]));
+            file_str = "";
+            let file_size_arry=[];
+            let file_id=[];
+            for(var f in file_arr)
+            {
+                await file_arr[f].arrayBuffer().then(arrayBuffer => {
+                    // 输出转换后的 ArrayBuffer 数据
+                    //console.log(bytesToHex(arrayBuffer));
+                    let f_str = bytesToHex(arrayBuffer);
+                    file_size_arry[f] = f_str.length/2;
+                    file_str += f_str;
+                    file_id[f]=arrayBuffer[0];
+                    console.log(arrayBuffer);
+                    console.log(arrayBuffer.slice(0,1));
+                    console.log(bytesToHex(arrayBuffer));
+                });
+            }
+            console.log("file_id:", file_id);
+            let file_offset_arry=[];
+            let file_count = file_arr.length;
+            console.log("file_count:", file_count);
+            for(var f in file_size_arry)
+            {
+                if(f==0)
+                {
+                    file_offset_arry[f] = 12+file_count*4;
+                }
+                else
+                {
+                    file_offset_arry[f] = file_offset_arry[f-1]+file_size_arry[f-1];
+                }
+            }
+            let file_size = file_str.length/2;
+            console.log("file_size:", file_size);
+            console.log("file_size_arry:", file_size_arry);
+            console.log("file_offset_arry:", file_offset_arry);
+            console.log(file_str);
+
+            let file_str_data = "";
+
+            file_str_data = "";
+            file_str_data = "464F4E54";
+            file_str_data += intToHex(file_count, 2);
+            file_str_data += intToHex(file_size, 2);
+            file_str_data += "00000000";//CRC
+
+            for(var f in file_offset_arry)
+            {
+                file_str_data += intToHex(f, 1);
+                file_str_data += "00";//id
+                file_str_data += intToHex(file_offset_arry[f], 2);
+            }
+            file_str_data += file_str;
+
+            console.log(file_str_data);
+
+            //sendFontBuffer(file_str_data);
+
+            let binaryData = new Uint8Array(hexToBytes(file_str_data));
+            let blob = new Blob([binaryData], {type: 'application/octet-stream'});
+            //let blob = new Blob(file_arr, {type: 'application/octet-stream'});
+            // 创建一个URL指向这个Blob对象
+            let url = URL.createObjectURL(blob);
+
+            // 创建一个<a>标签
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = 'font_data_file.bin'; // 设置下载的文件名
+
+            // 将<a>标签添加到文档中并触发点击事件
+            document.body.appendChild(a);
+            a.click();
+
+            // 清理：移除<a>标签并释放URL对象
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // 页面初始化
+        document.body.onload = () => {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let is_allow_drawing = false;
+            let is_allow_move_editor = false;
+            const image_mode = document.getElementById('canvas-mode');
+            const paint_size = document.getElementById('paint-size');
+            const paint_color = document.getElementById('paint-color');
+            const editor = document.getElementById('edit-font');
+            const font = document.getElementById('font');
+
+            document.getElementById('dithering').value = 'Atkinson';
+            image_mode.value = 'paint';
+            paint_color.value = 'black';
+            font.value = '黑体';
+
+            // 文本编辑器事件
+            editor.onmousemove = function (e) {
+                editor.style.fontSize = `${paint_size.value * 10}px`;
+                editor.style.color = paint_color.value;
+                editor.style.fontFamily = font.value;
+                editor.style.fontWeight = 'bold';
+
+                if (is_allow_move_editor) {
+                    const {x, y} = get_position(canvas, e.clientX, e.clientY);
+                    if (x < 0 || y < 0 || x > canvas.width || y > canvas.height) {
+                        return;
+                    }
+
+                    editor.style.left = `${e.clientX-20}px`;
+                    editor.style.top = `${e.clientY-20}px`;
+                }
+            }
+
+            editor.onmousedown = function (e) {
+                is_allow_move_editor = true;
+            }
+
+            editor.onmouseup = function (e) {
+                is_allow_move_editor = false;
+            }
+
+            document.getElementById('update-text').onclick = function () {
+                if (!editor.value.length) {
+                    alert('请先输入文字内容');
+                    return;
+                }
+                editor.style.display = 'none';
+                ctx.beginPath();
+                ctx.font = `bold ${paint_size.value * 10}px ${font.value}`;
+                ctx.fillStyle = paint_color.value;
+                const {x, y} = get_position(canvas, parseInt(editor.style.left), parseInt(editor.style.top) + paint_size.value * 10);
+
+                ctx.fillText(editor.value, x, y);
+                addLog('✓ 文字已添加到画布');
+            }
+
+            // 模式切换事件
+            image_mode.onchange = function (e) {
+                if (image_mode.value === 'font') {
+                    document.getElementById('update-text').style.display = 'inline-block';
+                    document.getElementById('font').style.display = 'inline-block';
+
+                    editor.style.display = 'block';
+                    editor.style.left = `${e.clientX}px`;
+                    editor.style.top = `${e.clientY}px`;
+                    return;
+                }
+                document.getElementById('update-text').style.display = 'none';
+                document.getElementById('font').style.display = 'none';
+                editor.style.display = 'none';
+            }
+
+            paint_size.onchange = function () {
+                if (image_mode.value === 'font') {
+                    editor.style.fontSize = `${paint_size.value * 10}px`;
+                }
+            }
+
+            paint_color.onchange = function () {
+                if (image_mode.value === 'font') {
+                    editor.style.color = paint_color.value;
+                }
+            }
+
+            font.onchange = function () {
+                if (image_mode.value === 'font') {
+                    editor.style.fontFamily = font.value;
+                }
+            }
+
+            // 画布绘制事件
+            canvas.onmousedown = function(e) {
+                let ele = get_position(canvas, e.clientX, e.clientY)
+                let { x, y } = ele
+
+                switch (image_mode.value) {
+                    case 'paint':
+                        is_allow_drawing = true;
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        break;
+                    case 'font':
+                        editor.style.display = 'block';
+                        editor.style.left = `${e.clientX}px`;
+                        editor.style.top = `${e.clientY}px`;
+                        editor.style.fontSize = `${paint_size.value * 10}px`;
+                        editor.style.color = paint_color.value;
+                        editor.style.fontFamily = font.value;
+                        editor.style.fontWeight = 'bold';
+                        break
+                    default:
+                        break;
+                }
+            };
+
+            canvas.onmousemove = (e) => {
+                let ele = get_position(canvas, e.clientX, e.clientY)
+                let { x, y } = ele;
+                switch (image_mode.value) {
+                    case 'paint':
+                        if (is_allow_drawing) {
+                            ctx.lineWidth = paint_size.value;
+                            ctx.strokeStyle = paint_color.value;
+                            ctx.lineTo(x, y);
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'font':
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            canvas.onmouseup = function() {
+                switch (image_mode.value) {
+                    case 'paint':
+                        is_allow_drawing = false;
+                        break;
+                    case 'font':
+                        editor.focus();
+                        is_allow_move_editor = false;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            canvas.onmouseleave = function () {
+                if (image_mode.value === 'paint') {
+                    is_allow_drawing = false;
+                }
+            }
+
+            addLog('✓ 系统初始化完成');
+        }
+
+        // 标签页切换
+        function showContent(contentId) {
+            const contents = document.querySelectorAll('.content');
+            contents.forEach(content => content.classList.remove('active'));
+
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            document.getElementById(contentId).classList.add('active');
+
+            const activeTab = tabs[contentId.replace('content', '') - 1];
+            activeTab.classList.add('active');
+        }
+
+        function addHolidayRow()
+        {
+            let holiday_data = document.getElementsByName("holiday_date");
+            if(holiday_data.length<16)
+            {
+                var table =document.getElementById("holiday_table");
+                table.innerHTML += '<tr><td><input type="date" id="holiday_date" name="holiday_date"></td><td><input type="text" id="holiday_name" name="holiday_name"></input></td></tr>';
+            }
+        }
+
+        function getHolidayData()
+        {
+            let holiday_data = document.getElementsByName("holiday_date");
+            let holiday_name = document.getElementsByName("holiday_name");
+            if(holiday_data==null)
+            {
+                return;
+            }
+
+            //console.log(holiday_data);
+            //console.log(holiday_name);
+            cmd="F4A55A"+intToHex(holiday_data.length,1)+"0000000000";
+            for(let i=0;i<holiday_data.length;i++)
+            {
+                const date = new Date(holiday_data[i].value);
+                cmd += intToHex((date.getFullYear())&0xFF, 1)
+                    + intToHex((date.getFullYear()>>8)&0xFF, 1)
+                    + intToHex(date.getMonth() + 1,1)
+                    + intToHex(date.getDate(),1);
+                cmd += encodeToGb2312(holiday_name[i].value).padEnd(16,'0');
+            }
+            console.log(cmd);
+            triggerRxTxCmd(cmd);
+        }
+
+        function saveFontFile()
+        {
+            let font_data = document.getElementById("font_data").value;
+            let font_code = document.getElementById("font_code").value;
+            let font_id = document.getElementById("font_id").value;
+            let font_width = document.getElementById("font_width").value;
+            let font_height = document.getElementById("font_height").value;
+            font_width = Math.floor(font_width/2);
+            let en_font_len = Math.floor((Math.floor(font_width)+7)/8)*font_height;
+            let cn_font_len = Math.floor((Math.floor(font_width*2)+7)/8)*font_height;
+            console.log("en_font_len,", en_font_len);
+            console.log("cn_font_len,", cn_font_len);
+
+            font_codes = font_code.split("\n");
+            font_array_data = "";
+            for(var i in font_codes)
+            {
+                console.log(font_codes[i]);
+                let str = font_codes[i].replace(/DB /g, "").replace(/H/g, "");
+                if(str.lastIndexOf(";")>0)
+                {
+                    str = str.substring(0, str.lastIndexOf(";"));
+                }
+                if(str.lastIndexOf(";")>0)
+                {
+                    str = str.substring(0, str.lastIndexOf(";"));
+                }
+                str = str.replace(/ /g, "");
+                //font_array.push(str);
+                console.log(str);
+                font_array_data += str;
+            }encodeToGb2312
+            console.log(font_array_data);
+            console.log(font_array_data.length);
+
+            console.log(font_data);
+            font_data_2312=encodeToGb2312(font_data);
+            console.log(font_data_2312);
+
+
+
+            let font_code_len=0;
+            for(var i in font_data)
+            {
+                let f_code =parseInt(encodeToGb2312(font_data[i]), 16);
+                if(f_code>=0x100)
+                {
+                    font_code_len+=cn_font_len;
+                }
+                else
+                {
+                    font_code_len+=en_font_len;
+                }
+            }
+
+            let font_file_data="";
+            font_file_data+=Math.floor(font_id).toString(16).toUpperCase().padStart(2, '0');
+            font_file_data+="00";
+            font_file_data+=Math.floor(font_width).toString(16).toUpperCase().padStart(4, '0');
+            font_file_data+=Math.floor(font_height).toString(16).toUpperCase().padStart(4, '0');
+            font_file_data+=Math.floor((10+font_data_2312.length/2+font_code_len)).toString(16).toUpperCase().padStart(4, '0');
+            font_file_data+=(font_data_2312.length/2).toString(16).toUpperCase().padStart(4, '0');
+            font_file_data += font_data_2312;
+            font_file_data += font_array_data;
+
+            console.log(font_data_2312);
+            console.log(font_file_data);
+            console.log("font_code_len", font_code_len*2);
+            console.log("font_array_data.length", font_array_data.length);
+
+            if(font_code_len*2!=font_array_data.length)
+            {
+                alert("字库数据错误，请严格按照要求填写数据内容。");
+                return;
+            }
+
+
+            let binaryData = new Uint8Array(hexToBytes(font_file_data));
+            let blob = new Blob([binaryData], {type: 'application/octet-stream'});
+            // 创建一个URL指向这个Blob对象
+            let url = URL.createObjectURL(blob);
+
+            // 创建一个<a>标签
+            let a = document.createElement('a');
+            a.href = url;
+            a.download = 'font_file.font'; // 设置下载的文件名
+
+            // 将<a>标签添加到文档中并触发点击事件
+            document.body.appendChild(a);
+            a.click();
+
+            // 清理：移除<a>标签并释放URL对象
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+    </script>
+
+    <div class="container">
+        <div class="header">
+            <h1>🏷️ 智能电子价签蓝牙控制中心</h1>
+            <p>专业的电子价签管理系统 - 支持2.13英寸价签 (分辨率: 104×212 和 122×250)</p>
+        </div>
+
+        <p>未登录，功能将受限，请登录后再操作。如果没有账号，请购买价签后联系管理员创建账号。</p>        <div class="connection-panel">
+            <div class="connection-buttons">
+                <button id="connectbutton" class="btn btn-success" onclick="preConnect();">
+                    <span class="status-indicator"></span>连接设备
+                </button>
+                <button class="btn btn-warning" onclick="reConnect();">🔄 重新连接</button>
+                <button class="btn btn-info" onclick="document.getElementById(&#39;log&#39;).value = &#39;&#39;;">🗑️ 清空日志</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab" onclick="showContent(&#39;content1&#39;)">⚙️ 基础控制</div>
+            <div class="tab active" onclick="showContent(&#39;content2&#39;)">🖼️ 图像处理</div>
+            <div class="tab" onclick="showContent(&#39;content3&#39;)">🔧 二次开发</div>
+            <div class="tab" onclick="showContent(&#39;content4&#39;)">🔧 生日设置</div>
+            <div class="tab" onclick="showContent(&#39;content5&#39;)">🔧 显示数据下载</div>
+            <div class="tab" onclick="showContent(&#39;content6&#39;)">🔧 字库下载</div>
+        </div>
+
+        <div id="content1" class="content">
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-title">📡 指令控制</div>
+                    <div class="form-group">
+                        <label class="form-label">自定义指令</label>
+                        <div style="display: flex; gap: 10px;">
+                            <textarea id="cmdTXT" class="form-control" placeholder="输入16进制指令代码" rows="10">E2</textarea>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+
+                            <button class="btn" onclick="triggerRxTxCmd(document.getElementById(&#39;cmdTXT&#39;).value);">发  送</button>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🎮 快捷操作</div>
+                    <div class="button-group">
+                        <button class="btn tooltip" onclick="triggerShowCmd(&#39;e100&#39;)" data-tooltip="显示上传的图片">📷 图片模式</button>
+                        <button class="btn tooltip" onclick="triggerShowCmd(&#39;e101&#39;)" data-tooltip="显示日历界面">📅 日历模式</button>
+                        <button class="btn tooltip" onclick="triggerShowCmd(&#39;e102&#39;)" data-tooltip="显示时钟界面">🕐 时钟模式</button>
+                        <button class="btn tooltip" onclick="triggerShowCmd(&#39;e103&#39;)" data-tooltip="自定义显示模式">⚡ 自定义模式</button>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn tooltip" onclick="triggerRxTxCmd(&#39;e2&#39;)" data-tooltip="刷新屏幕显示">🔄 刷新屏幕</button>
+                        <button class="btn tooltip" onclick="triggerRxTxCmd(&#39;E001&#39;)" data-tooltip="切换显示屏幕">🔀 切换屏幕</button>
+                        <button class="btn tooltip" onclick="triggerRxTxCmd(&#39;e3&#39;)" data-tooltip="黑白反色显示">🔄 反色显示</button>
+                        <button class="btn tooltip" onclick="setTime()" data-tooltip="同步系统时间">⏰ 同步时间</button>
+                        <button class="btn tooltip" onclick="triggerRxTxCmd(&#39;EFFEFF&#39;)" data-tooltip="保存参数">🔄 保存参数</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🌍 刷新模式</div>
+                    <div class="form-group">
+                        <label class="form-label">选择刷新模式</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="refresh_mode" class="form-control form-control-inline">
+                                <option value="0" selected="selected">按分钟刷新</option>
+                                <option value="1">按小时刷新</option>
+                                <option value="2">按天刷新</option>
+                                <option value="3">从不主动刷新</option>
+                            </select>
+                            <button class="btn" onclick="ModifyRefreshMode()">设置刷新模式</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🌍 时区设置</div>
+                    <div class="form-group">
+                        <label class="form-label">选择时区</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="timezone" class="form-control form-control-inline">
+                                <option value="-12">UTC-12</option>
+                                <option value="-11">UTC-11</option>
+                                <option value="-10">UTC-10</option>
+                                <option value="-9">UTC-9</option>
+                                <option value="-8">UTC-8</option>
+                                <option value="-7">UTC-7</option>
+                                <option value="-6">UTC-6</option>
+                                <option value="-5">UTC-5</option>
+                                <option value="-4">UTC-4</option>
+                                <option value="-3">UTC-3</option>
+                                <option value="-2">UTC-2</option>
+                                <option value="-1">UTC-1</option>
+                                <option value="0">UTC+0</option>
+                                <option value="1">UTC+1</option>
+                                <option value="2">UTC+2</option>
+                                <option value="3">UTC+3</option>
+                                <option value="4">UTC+4</option>
+                                <option value="5">UTC+5</option>
+                                <option value="6">UTC+6</option>
+                                <option value="7">UTC+7</option>
+                                <option value="8" selected="selected">UTC+8 (北京时间)</option>
+                                <option value="9">UTC+9</option>
+                                <option value="10">UTC+10</option>
+                                <option value="11">UTC+11</option>
+                                <option value="12">UTC+12</option>
+                            </select>
+                            <button class="btn" onclick="ModifyTimeZone()">应用时区</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🔑 设备激活</div>
+                    <div class="form-group">
+                        <label class="form-label">激活码(<a href="https://epd.eled.top/regcode/">计算激活码</a>)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="reg_code" class="form-control" placeholder="请输入设备激活码">
+                            <button class="btn" onclick="dev_reg()">激活设备</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content2" class="content active">
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-title">📁 图片上传</div>
+                    <div class="form-group">
+                        <label class="form-label">选择图片文件</label>
+                        <input type="file" id="image_file" onchange="update_image()" accept=".png,.jpg,.bmp,.webp" class="form-control">
+                        <small style="color: #666; margin-top: 5px; display: block;">支持 PNG、JPG、BMP、WebP 格式</small>
+                    </div>
+                    <label class="form-label">分辨率：</label>
+                    <select id="resolution" onchange="change_resolution()" class="form-control form-control-inline">
+                        <option value="0">104*212</option>
+                        <option value="1" selected="">122*250</option>
+                    </select>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🎨 图像处理</div>
+                    <div class="form-group">
+                        <label class="form-label">抖动算法</label>
+                        <select id="dithering" class="form-control">
+                            <optgroup label="黑白处理">
+                                <option value="none">二值化处理</option>
+                                <option value="bayer">Bayer 抖动</option>
+                                <option value="floydsteinberg">Floyd-Steinberg 抖动</option>
+                                <option value="Atkinson" selected="selected">Atkinson 抖动 (推荐)</option>
+                            </optgroup>
+                            <optgroup label="三色处理 (黑白红)">
+                                <option value="bwr_floydsteinberg">三色 Floyd-Steinberg</option>
+                                <option value="bwr_Atkinson">三色 Atkinson</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">二值化阈值 (0-255)</label>
+                        <input type="number" max="255" min="0" value="125" id="threshold" class="form-control">
+                    </div>
+                    <div class="button-group">
+                        <button class="btn" onclick="update_image()">🔄 重新处理</button>
+                        <button class="btn btn-warning" onclick="clear_canvas()">🗑️ 清空画布</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">✏️ 绘图工具</div>
+                    <div class="form-group">
+                        <label class="form-label">绘图模式</label>
+                        <select id="canvas-mode" class="form-control">
+                            <option value="paint" selected="selected">🖌️ 画笔绘制</option>
+                            <option value="font">📝 文字输入</option>
+                        </select>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label class="form-label">画笔/文字大小</label>
+                            <input type="number" max="13" min="1" step="1" value="3" id="paint-size" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">颜色选择</label>
+                            <select id="paint-color" class="form-control">
+                                <option value="white">⚪ 白色</option>
+                                <option value="black" selected="selected">⚫ 黑色</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">字体选择</label>
+                        <select id="font" class="form-control" style="display: none;">
+                            <option value="微软雅黑">微软雅黑</option>
+                            <option value="黑体" selected="selected">黑体</option>
+                            <option value="仿宋">仿宋</option>
+                            <option value="宋体">宋体</option>
+                            <option value="楷体_GB2312">楷体</option>
+                            <option value="华文行楷">华文行楷</option>
+                        </select>
+                        <button id="update-text" class="btn" style="display: none">💾 保存文字</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🖼️ 画布预览</div>
+                    <div class="canvas-container">
+                        <input id="edit-font" placeholder="输入文字内容...">
+                        <canvas id="canvas" width="250" height="122"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📤 图片管理</div>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">图片槽位</label>
+                            <select id="image_id" class="form-control form-control-inline">
+                                <option value="0" selected="selected">📷 图片槽 1</option>
+                                <option value="1">📷 图片槽 2</option>
+                                <option value="2">📷 图片槽 3</option>
+                                <option value="3">📷 图片槽 4</option>
+                                <option value="4">📷 图片槽 5</option>
+                                <option value="5">📷 图片槽 6</option>
+                                <option value="6">📷 图片槽 7</option>
+                                <option value="7">📷 图片槽 8</option>
+                            </select>
+                        </div>
+                        <div class="button-group" style="margin-bottom: 0;">
+                            <button class="btn btn-info" onclick="channel_image()">👁️ 显示图片</button>
+                            <button class="btn btn-success" onclick="upload_image()">📤 上传到设备</button>
+                            <button class="btn btn-warning" onclick="image_saveas(document.getElementById(&#39;image_interval&#39;).value)">🖼️ 图片数据另存</button>
+                        </div>
+                        <div class="button-group" style="margin-bottom: 0;">
+                            文件分割大小：<input type="text" id="image_interval" name="image_interval" value="20" style="width: 50px; margin-left: 10px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content3" class="content">
+            <div class="card">
+                <div class="card-title">⚙️ 高级显示设置</div>
+                <div class="form-group">
+                    <label class="form-label">自定义显示命令（中文仅支持<a href="https://epd.eled.top/encoding/gb2312.html" target="_blank">GB2312编码</a>）<a href="https://epd.eled.top/webtools/show_cmd_list.php">指令列表</a></label>
+                    <textarea id="show_setting_cmd" class="form-control" rows="10" placeholder="输入显示设置命令...">RECT(0,0,120,18,0,1,1)
+FONT(5,1,0,1,1,0,'日一二三四五六')
+CAL(5,20,16,12,0,0,1)
+FONT(130,2,0,1,0,1,'{y}-{m}')
+RECT(189,8,191,14,0,1,1)
+RECT(192,6,210,18,0,1,1)
+FONT(192,4,0,0,1,0,'{b}')
+FONT(130,22,0,2,0,1,'{m}')
+FONT(175,16,0,0,0,1,'{mac}')
+ICON(190,30,0,99,0,1)
+RECT(198,{-c+70},199,70,0,1,1)
+FONT(140,72,0,1,0,1,'{H}:{N}')
+FONT(192,80,0,0,0,1,'{c}C')
+FONT(90,90,0,0,0,1,'{VER}')
+FONT(1,-17,0,1,0,1,'{GKD}')
+FONT(126,-17,0,1,0,1,'{ls}{lb}{ly}年')
+LINE(125,1,125,104,0,1,1)
+LINE(1,1,212,1,0,1,1)
+LINE(1,1,1,104,0,1,1)
+LINE(212,1,212,104,0,1,1)
+LINE(1,104,212,104,0,1,1)</textarea>
+                <button class="btn btn-success" onclick="show_setting(document.getElementById(&#39;show_setting_cmd&#39;).value)">
+                    🚀 应用显示设置
+                </button>
+                <button class="btn btn-success" onclick="show_setting_saveas(document.getElementById(&#39;show_setting_cmd&#39;).value)">
+                    🚀 保存
+                </button>
+				<div id="charCount">当前 0 字符</div>
+                    <small style="color: #666; margin-top: 5px; display: block;">
+                        命令格式说明：<br>
+                        • POINT(x,y,color,pix,type) - 绘制点<br>
+                        • LINE(x,y,x2,y2,color,pix,type) - 绘制线段<br>
+                        • CIRCLE(x,y,rad,color,pix,type) - 绘制圆形<br>
+                        • CAL(x,y,gw,gh,font,fore,back) - 显示日历<br>
+                        • ICON(x,y,icon_id,font,fore,back) - 显示图标<br>
+                        • RECT(x,y,x2,y2,color,pix,type) - 绘制矩形<br>
+                        • FONT(x,y,g,f1,f2,b,'text') - 显示文字<br>
+                        • IMG(index,0) - 显示图片(index:{0-6})<br>
+                        • 变量: <br>
+                                {y}年 {m}月 {H}时 {N}分 {c}温度 {b}电量 {VER}版本<br>
+                                {GKD}高考信息 {GKd}距离高考天数<br>
+                                {ls}天干 {lb}地支 {ly}阴历年 {lm}阴历月 {ld}阴历日 {lT} 节气数据<br>
+                                {hxn} 生日信息,目前仅支持阳历, 其中, n为序号, 可取(0-15), x可取:t、a、n、m、d<br>
+                                t为姓名, a为年龄, n为剩余天数, m为月, d为日
+                        * 计算表达式：x,y,r,index：可识别变量，变量可识别简单的四则混合运算
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div id="content4" class="content">
+            <div class="card">
+                <div class="card-title">⚙️ 生日设置</div>
+                <div>请按照生日先后顺序添加,最多16条,有些姓名字库中没有,可用英文代替（中文仅支持<a href="https://epd.eled.top/encoding/gb2312.html" target="_blank">GB2312编码</a>）</div>
+                <div class="form-group">
+                    <table id="holiday_table" border="1">
+                        <tbody><tr>
+                            <th id="td_age">生日</th>
+                            <th id="td_name">姓名（最多三个汉字，或者7个英文字符）</th>
+                            <th id="td_opt"><input type="button" id="btn_add" value="添加" onclick="addHolidayRow()"></th>
+                        </tr>
+                    </tbody></table>
+                    <button class="btn btn-success" onclick="getHolidayData()">应用生日数据</button>
+                </div>
+            </div>
+        </div>
+        <div id="content5" class="content">
+			<div class="card">
+				<div class="card-title">⚙️ 显示数据下载</div>
+                必须V1.30以上版本的程序才能支持，可以选择多个文件。
+                <div class="form-group">
+                    <input type="file" id="show_file" multiple="multiple" accept=".txt" class="form-control">
+                </div>
+                <button class="btn btn-success" onclick="save_show_code(document.getElementById(&#39;show_file&#39;))">
+                    🚀 导出显示数据文件
+                </button>
+                <button class="btn btn-success" onclick="down_show_code(document.getElementById(&#39;show_file&#39;))">
+                    🚀 下载
+                </button>
+            </div>
+		</div>
+		<!--
+        <div id="content5" class="content">
+            <div class="card">
+                <div class="card-title">⚙️ 字库制作</div>
+                <div  style="display: flex; gap: 10px; align-items: center;">
+                    <label class="form-label">字库ID：<input type="number" value="1" id="font_id"></label>
+                </div>
+                <div  style="display: flex; gap: 10px; align-items: center;">
+                    <label class="form-label">字体宽度：<input type="number" value="16" id="font_width">（中文字体宽度，必须为偶数）</label>
+                    <label class="form-label">字体高度：<input type="number" value="16" id="font_height"></label>
+                </div>
+                <div  style="display: flex; gap: 10px; align-items: center;">
+                    <label class="form-label">文本：<textarea id="font_data" placeholder="文本" rows="5" cols="120">0123456789</textarea></label>
+
+                </div>
+                <div  style="gap: 10px; align-items: center;">
+                    <label class="form-label">字模：（<a href="javascript:alert('暂未编写，敬请期待。')">字模数据获取方式</a>）（中文仅支持<a href="../encoding/gb2312.html" target="_blank">GB2312编码</a>）</label>
+                    <textarea id="font_code" placeholder="请按照格式要求输入" rows="20" cols="120">
+DB 00H 00H 00H 18H 24H 42H 42H 42H 42H 42H 42H 42H 24H 18H 00H 00H;"0",0
+DB 00H 00H 00H 08H 38H 08H 08H 08H 08H 08H 08H 08H 08H 3EH 00H 00H;"1",1
+DB 00H 00H 00H 3CH 42H 42H 42H 02H 04H 08H 10H 20H 42H 7EH 00H 00H;"2",2
+DB 00H 00H 00H 3CH 42H 42H 02H 04H 18H 04H 02H 42H 42H 3CH 00H 00H;"3",3
+DB 00H 00H 00H 04H 0CH 0CH 14H 24H 24H 44H 7FH 04H 04H 1FH 00H 00H;"4",4
+DB 00H 00H 00H 7EH 40H 40H 40H 78H 44H 02H 02H 42H 44H 38H 00H 00H;"5",5
+DB 00H 00H 00H 18H 24H 40H 40H 5CH 62H 42H 42H 42H 22H 1CH 00H 00H;"6",6
+DB 00H 00H 00H 7EH 42H 04H 04H 08H 08H 10H 10H 10H 10H 10H 00H 00H;"7",7
+DB 00H 00H 00H 3CH 42H 42H 42H 24H 18H 24H 42H 42H 42H 3CH 00H 00H;"8",8
+DB 00H 00H 00H 38H 44H 42H 42H 42H 46H 3AH 02H 02H 24H 18H 00H 00H;"9",9
+</textarea>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-success" onclick="saveFontFile()">保存字库文件</button>
+                </div>
+            </div>
+        </div>
+		-->
+        <div id="content6" class="content">
+            <div class="card">
+                <div class="card-title">⚙️ 下载自定义字库</div>
+                必须V1.30以上版本的程序才能支持，可以选择多个文件，其中字库ID不能重复，字库总尺寸不能超过52k（未激活设备不能修改字库）。
+                <div class="form-group">
+                    <input type="file" id="font_file" multiple="multiple" accept=".font" class="form-control">
+                </div>
+                <button class="btn btn-success" onclick="save_font_code(document.getElementById(&#39;font_file&#39;))">
+                    🚀 导出字库文件
+                </button>
+                <button class="btn btn-success" onclick="down_font_code(document.getElementById(&#39;font_file&#39;))">
+                    🚀 下载
+                </button>
+            </div>
+        </div>
+        <div id="content7" class="content">
+            <div class="card">
+                <div class="card-title">📡 OTA指令测试</div>
+                <div class="form-group">
+                    <label class="form-label">自定义指令</label>
+                    <div style="display: flex; gap: 10px;">
+                        <textarea id="cmdOtaTXT" class="form-control" placeholder="输入16进制指令代码" rows="10">E2</textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+
+                        <button class="btn" onclick="otaRxTxCmd(document.getElementById(&#39;cmdOtaTXT&#39;).value);">发  送</button>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                    </div>
+                </div>
+            </div>
+           <div class="card">
+                <div class="card-title">⚙️ OTA升级程序</div>
+
+                <div class="form-group">
+                    <input type="file" id="ota_file" accept=".img" class="form-control">
+                </div>
+                <button class="btn btn-success" onclick="ota_code(document.getElementById(&#39;ota_file&#39;).files[0])">
+                    🚀 OTA升级
+                </button>
+            </div>
+        </div>
+
+        <div class="log-container">
+            <div class="log-header">
+                📋 系统日志
+            </div>
+            <textarea id="log" readonly="" placeholder="系统日志将在这里显示..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 默认显示图像处理标签页
+            showContent('content2');
+        });
+        const textarea = document.getElementById('show_setting_cmd');
+        const charCountDiv = document.getElementById('charCount');
+        textarea.addEventListener('input', function() {
+            const textLength = textarea.value.length;
+            charCountDiv.textContent = `当前 ${textLength} 字符`;
+        });
+    </script>
+
+</body></html>
